@@ -1,0 +1,33 @@
+# Normalize line endings for all text files; let Git handle the conversion.
+* text=auto eol=lf
+
+# Explicit text types
+*.py text
+*.md text
+*.sh text
+*.ts text
+*.tsx text
+*.js text
+*.mjs text
+*.json text
+*.csv text
+*.yml text
+*.yaml text
+*.toml text
+*.cfg text
+*.ini text
+*.txt text
+
+# Windows scripts, if any, keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary / do-not-touch
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.sqlite binary
+*.sqlite3 binary

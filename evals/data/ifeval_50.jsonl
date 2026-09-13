@@ -1,0 +1,50 @@
+{"id": "if_00", "prompt": "Name three primary colors. Answer in exactly 3 bullet points, one color per bullet, using \"- \" as the bullet marker and nothing else on each line.", "checker": "bullet_count", "checker_args": {"n": 3, "marker": "- "}}
+{"id": "if_01", "prompt": "Explain what photosynthesis is in one short paragraph. Respond entirely in uppercase letters.", "checker": "all_caps", "checker_args": {}}
+{"id": "if_02", "prompt": "Write two sentences about the ocean. The word \"ocean\" must appear at least twice in your response.", "checker": "word_count_at_least", "checker_args": {"word": "ocean", "count": 2}}
+{"id": "if_03", "prompt": "Describe a cat and a dog as JSON. Output only valid JSON with exactly the keys \"a\" and \"b\" (a=cat description, b=dog description), no other text.", "checker": "json_keys", "checker_args": {"keys": ["a", "b"]}}
+{"id": "if_04", "prompt": "List four programming languages. Answer in exactly 4 bullet points, one language per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 4, "marker": "- "}}
+{"id": "if_05", "prompt": "Give a one-line definition of gravity. Respond entirely in lowercase letters, no capital letters at all.", "checker": "all_lower", "checker_args": {}}
+{"id": "if_06", "prompt": "Write a short note about your favorite season. The word \"season\" must appear at least three times.", "checker": "word_count_at_least", "checker_args": {"word": "season", "count": 3}}
+{"id": "if_07", "prompt": "Describe a book title and its author as JSON. Output only valid JSON with exactly the keys \"title\" and \"author\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["title", "author"]}}
+{"id": "if_08", "prompt": "List five countries in Europe. Answer in exactly 5 bullet points, one country per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 5, "marker": "- "}}
+{"id": "if_09", "prompt": "Summarize what a computer is in one paragraph. Respond entirely in uppercase letters.", "checker": "all_caps", "checker_args": {}}
+{"id": "if_10", "prompt": "Write a short reply about mountains. The word \"mountain\" must appear at least twice.", "checker": "word_count_at_least", "checker_args": {"word": "mountain", "count": 2}}
+{"id": "if_11", "prompt": "Describe a city and its country as JSON. Output only valid JSON with exactly the keys \"city\" and \"country\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["city", "country"]}}
+{"id": "if_12", "prompt": "Name three types of fruit. Answer in exactly 3 bullet points, one fruit per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 3, "marker": "- "}}
+{"id": "if_13", "prompt": "Explain what the moon is in one short paragraph. Respond entirely in lowercase letters, no capitals.", "checker": "all_lower", "checker_args": {}}
+{"id": "if_14", "prompt": "Write two sentences about coffee. The word \"coffee\" must appear at least twice.", "checker": "word_count_at_least", "checker_args": {"word": "coffee", "count": 2}}
+{"id": "if_15", "prompt": "Describe a movie as JSON. Output only valid JSON with exactly the keys \"name\" and \"year\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["name", "year"]}}
+{"id": "if_16", "prompt": "List six animals found in a zoo. Answer in exactly 6 bullet points, one animal per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 6, "marker": "- "}}
+{"id": "if_17", "prompt": "Describe the sun in one short paragraph. Respond entirely in uppercase letters.", "checker": "all_caps", "checker_args": {}}
+{"id": "if_18", "prompt": "Write a short note about music. The word \"music\" must appear at least three times.", "checker": "word_count_at_least", "checker_args": {"word": "music", "count": 3}}
+{"id": "if_19", "prompt": "Describe a recipe as JSON. Output only valid JSON with exactly the keys \"dish\" and \"ingredients\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["dish", "ingredients"]}}
+{"id": "if_20", "prompt": "Name four sports. Answer in exactly 4 bullet points, one sport per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 4, "marker": "- "}}
+{"id": "if_21", "prompt": "Explain what rain is in one short paragraph. Respond entirely in lowercase letters.", "checker": "all_lower", "checker_args": {}}
+{"id": "if_22", "prompt": "Write two sentences about dogs. The word \"dog\" must appear at least twice.", "checker": "word_count_at_least", "checker_args": {"word": "dog", "count": 2}}
+{"id": "if_23", "prompt": "Describe a person as JSON. Output only valid JSON with exactly the keys \"name\" and \"age\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["name", "age"]}}
+{"id": "if_24", "prompt": "List three planets in the solar system. Answer in exactly 3 bullet points, one planet per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 3, "marker": "- "}}
+{"id": "if_25", "prompt": "Summarize what electricity is in one paragraph. Respond entirely in uppercase letters.", "checker": "all_caps", "checker_args": {}}
+{"id": "if_26", "prompt": "Write a short note about books. The word \"book\" must appear at least three times.", "checker": "word_count_at_least", "checker_args": {"word": "book", "count": 3}}
+{"id": "if_27", "prompt": "Describe a restaurant as JSON. Output only valid JSON with exactly the keys \"name\" and \"cuisine\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["name", "cuisine"]}}
+{"id": "if_28", "prompt": "List five kitchen appliances. Answer in exactly 5 bullet points, one appliance per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 5, "marker": "- "}}
+{"id": "if_29", "prompt": "Explain what wind is in one short paragraph. Respond entirely in lowercase letters.", "checker": "all_lower", "checker_args": {}}
+{"id": "if_30", "prompt": "Write two sentences about trees. The word \"tree\" must appear at least twice.", "checker": "word_count_at_least", "checker_args": {"word": "tree", "count": 2}}
+{"id": "if_31", "prompt": "Describe a laptop as JSON. Output only valid JSON with exactly the keys \"brand\" and \"price\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["brand", "price"]}}
+{"id": "if_32", "prompt": "Name four musical instruments. Answer in exactly 4 bullet points, one instrument per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 4, "marker": "- "}}
+{"id": "if_33", "prompt": "Describe snow in one short paragraph. Respond entirely in uppercase letters.", "checker": "all_caps", "checker_args": {}}
+{"id": "if_34", "prompt": "Write a short note about travel. The word \"travel\" must appear at least three times.", "checker": "word_count_at_least", "checker_args": {"word": "travel", "count": 3}}
+{"id": "if_35", "prompt": "Describe a smartphone as JSON. Output only valid JSON with exactly the keys \"model\" and \"os\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["model", "os"]}}
+{"id": "if_36", "prompt": "List six vegetables. Answer in exactly 6 bullet points, one vegetable per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 6, "marker": "- "}}
+{"id": "if_37", "prompt": "Explain what a river is in one short paragraph. Respond entirely in lowercase letters.", "checker": "all_lower", "checker_args": {}}
+{"id": "if_38", "prompt": "Write two sentences about bicycles. The word \"bicycle\" must appear at least twice.", "checker": "word_count_at_least", "checker_args": {"word": "bicycle", "count": 2}}
+{"id": "if_39", "prompt": "Describe a job posting as JSON. Output only valid JSON with exactly the keys \"title\" and \"salary\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["title", "salary"]}}
+{"id": "if_40", "prompt": "Name three types of weather. Answer in exactly 3 bullet points, one weather type per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 3, "marker": "- "}}
+{"id": "if_41", "prompt": "Summarize what the internet is in one paragraph. Respond entirely in uppercase letters.", "checker": "all_caps", "checker_args": {}}
+{"id": "if_42", "prompt": "Write a short note about friendship. The word \"friend\" must appear at least three times.", "checker": "word_count_at_least", "checker_args": {"word": "friend", "count": 3}}
+{"id": "if_43", "prompt": "Describe a car as JSON. Output only valid JSON with exactly the keys \"make\" and \"model\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["make", "model"]}}
+{"id": "if_44", "prompt": "List five hobbies. Answer in exactly 5 bullet points, one hobby per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 5, "marker": "- "}}
+{"id": "if_45", "prompt": "Explain what a volcano is in one short paragraph. Respond entirely in lowercase letters.", "checker": "all_lower", "checker_args": {}}
+{"id": "if_46", "prompt": "Write two sentences about stars. The word \"star\" must appear at least twice.", "checker": "word_count_at_least", "checker_args": {"word": "star", "count": 2}}
+{"id": "if_47", "prompt": "Describe a hotel booking as JSON. Output only valid JSON with exactly the keys \"hotel\" and \"nights\", no other text.", "checker": "json_keys", "checker_args": {"keys": ["hotel", "nights"]}}
+{"id": "if_48", "prompt": "Name four types of transportation. Answer in exactly 4 bullet points, one type per bullet, using \"- \" as the bullet marker.", "checker": "bullet_count", "checker_args": {"n": 4, "marker": "- "}}
+{"id": "if_49", "prompt": "Summarize what a library is in one paragraph. Respond entirely in uppercase letters.", "checker": "all_caps", "checker_args": {}}

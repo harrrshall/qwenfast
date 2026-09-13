@@ -1,0 +1,28 @@
+{
+  "name": "qwenfast-demo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "stub": "node stub/server.mjs",
+    "test": "node --test 'tests/trim.test.ts'",
+    "test:routes": "node --test 'tests/routes.test.ts'",
+    "test:all": "node --test 'tests/*.test.ts'"
+  },
+  "dependencies": {
+    "@vercel/analytics": "2.0.1",
+    "@vercel/speed-insights": "2.0.0",
+    "next": "15.5.24",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "undici": "7.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "typescript": "5.8.3"
+  }
+}

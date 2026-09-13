@@ -1,0 +1,17 @@
+# versions the engine was developed and benchmarked with (cuda 13, h200)
+torch==2.13.0
+triton==3.7.1
+flashinfer-python==0.6.16.post3
+fla-core==0.5.2
+vllm==0.28.0
+transformers==5.16.1
+safetensors==0.8.0
+huggingface_hub[hf_transfer]==1.28.0
+accelerate==1.14.0
+fastapi
+uvicorn
+pydantic>=2
+httpx
+pytest==9.1.1
+pyzmq
+pytest-asyncio

@@ -1,0 +1,30 @@
+# secrets: api keys, tokens, credentials
+.secrets/
+*.env
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv*/
+
+# node / next.js (demo/)
+**/node_modules/
+demo/.next/
+demo/.vercel/
+demo/.env*.local
+demo/next-env.d.ts
+demo/*.tsbuildinfo
+
+# runtime state
+*.sqlite
+*.sqlite3
+*.log
+exports/
+
+# os / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

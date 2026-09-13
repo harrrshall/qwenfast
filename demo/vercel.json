@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["bom1"],
+  "functions": {
+    "app/api/chat/route.ts": {
+      "maxDuration": 300
+    },
+    "app/v1/chat/completions/route.ts": {
+      "maxDuration": 300
+    },
+    "app/v1/completions/route.ts": {
+      "maxDuration": 300
+    }
+  }
+}
