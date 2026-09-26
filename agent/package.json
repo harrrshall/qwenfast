@@ -1,0 +1,27 @@
+{
+  "name": "qwenfast-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "long running autonomous agent on qwenfast, built on the pi sdk, with complexity routing",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "qfa": "bin/qfa"
+  },
+  "scripts": {
+    "start": "node src/daemon.ts",
+    "qfa": "node src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1 test/unit.test.ts test/daemon.e2e.test.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.87.1"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "*"
+  }
+}
