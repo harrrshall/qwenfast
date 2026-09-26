@@ -1,0 +1,81 @@
+#!/bin/sh
+# qfc: qwen fast code.
+#
+#   qfc [dir]            open the tui on dir (default: the current directory), attached to the
+#                        local server, so sessions keep running when the tui closes and every
+#                        terminal sees the same sessions
+#   qfc run "task"       one shot, non interactive, in the same synced session store
+#   qfc status           gateway, gpu box, models, routing and server health
+#   qfc up | down        wake the gpu box now | pause it now
+#   qfc logs [daemon|server]
+#   qfc service start|stop|restart|status
+#   qfc <other>          any opencode command (models, session, export, stats, mcp, ...)
+set -u
+QFC_HOME=${QFC_HOME:-$HOME/.qwenfast-code}
+BIN="$QFC_HOME/bin/qfc-bin"
+SERVER_PORT=${QFC_SERVER_PORT:-4097}
+GATEWAY_PORT=${QFA_PORT:-7788}
+SERVER="http://127.0.0.1:$SERVER_PORT"
+GATEWAY="http://127.0.0.1:$GATEWAY_PORT"
+SERVICES="$QFC_HOME/services.sh"
+
+[ -x "$BIN" ] || { echo "qfc is not installed ($BIN missing); run install.sh" >&2; exit 1; }
+OPENCODE_SERVER_PASSWORD=$(cat "$QFC_HOME/secrets/server_password" 2>/dev/null || true)
+export OPENCODE_SERVER_PASSWORD
+
+up() { curl -s -o /dev/null -m 2 "$1" 2>/dev/null; }
+server_up() { [ "$(curl -s -o /dev/null -w '%{http_code}' -m 2 -u "opencode:$OPENCODE_SERVER_PASSWORD" "$SERVER/doc" 2>/dev/null)" != "000" ]; }
+
+ensure_services() {
+  if ! up "$GATEWAY/health" || ! server_up; then
+    sh "$SERVICES" start >/dev/null 2>&1
+    i=0
+    while { ! up "$GATEWAY/health" || ! server_up; } && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
+    up "$GATEWAY/health" || { echo "qfc: the local gateway did not start; see: qfc logs daemon" >&2; exit 1; }
+    server_up || { echo "qfc: the local server did not start; see: qfc logs server" >&2; exit 1; }
+  fi
+}
+
+status() {
+  ensure_services
+  curl -s -m 5 "$GATEWAY/health" | GATEWAY="$GATEWAY" "$QFC_HOME/toolchain/node/bin/node" -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const h = JSON.parse(s), b = h.backend, g = h.gateway || {};
+      const ep = n => `${b.endpoints[n].healthy ? "up" : "down"}${b.endpoints[n].via ? " via " + b.endpoints[n].via : ""}`;
+      console.log(`gateway    ${process.env.GATEWAY}  (pid ${h.pid}, up ${h.uptimeS}s)`);
+      console.log(`gpu box    ${b.box.machineId ?? "-"}  ${b.box.status ?? "unknown"}${b.box.lastAction ? "  last: " + b.box.lastAction : ""}`);
+      console.log(`big        qwen3.8-27b       ${ep("big")}`);
+      console.log(`small      qwen3.6-35b-a3b   ${ep("small")}`);
+      console.log(`routing    ${g.requests ?? 0} requests  small ${g.byTier?.small ?? 0}  medium ${g.byTier?.medium ?? 0}  large ${g.byTier?.large ?? 0}  in flight ${g.inflight ?? 0}`);
+      console.log(`idle       ${b.idleMinutes} min (box pauses itself after the configured idle time)`);
+      const recent = (g.conversations || []).slice(0, 5);
+      if (recent.length) console.log("recent     " + recent.map(c => `${c.tier}${c.turnRequests ? " x" + c.turnRequests : ""} (${new Date(c.updated).toLocaleTimeString()})`).join(", "));
+    });'
+  echo "server     $SERVER  $(server_up && echo up || echo down)"
+}
+
+case "${1:-}" in
+  status) status ;;
+  up) ensure_services; curl -s -m 10 -X POST "$GATEWAY/box/wake?minutes=${2:-30}" >/dev/null && echo "waking the gpu box (kept up for ${2:-30} min without work); watch: qfc status" ;;
+  down) ensure_services; curl -s -m 900 -X POST "$GATEWAY/box/pause" && echo ;;
+  logs)
+    case "${2:-daemon}" in
+      server) tail -n 200 -F "$QFC_HOME/logs/server.log" ;;
+      *) tail -n 200 -F "$QFC_HOME/agent/logs/daemon.log" ;;
+    esac ;;
+  service) shift; exec sh "$SERVICES" "$@" ;;
+  upgrade) echo "qwen fast code is built from source: git pull, then sh code/install.sh" ;;
+  run)
+    shift
+    ensure_services
+    exec "$BIN" run --attach "$SERVER" --dir "$PWD" "$@" ;;
+  -h|--help|help)
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+  completion|acp|mcp|attach|debug|providers|auth|agent|uninstall|serve|web|models|stats|export|import|github|pr|session|plugin|db|-v|--version)
+    exec "$BIN" "$@" ;;
+  *)
+    DIR=$PWD
+    if [ $# -gt 0 ] && [ -d "$1" ]; then DIR=$(cd "$1" && pwd); shift; fi
+    ensure_services
+    exec "$BIN" attach "$SERVER" --dir "$DIR" "$@" ;;
+esac

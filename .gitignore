@@ -28,3 +28,9 @@ exports/
 *.swp
 .idea/
 .vscode/
+
+# qwen fast code build outputs
+code/.build/
+code/.toolchain/
+code/dist/
+!code/toolchain.env

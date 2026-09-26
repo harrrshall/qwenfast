@@ -21,6 +21,16 @@ qwenfast leads at low concurrency, where speculative decoding amortizes the weig
 
 full methodology, latency tables and quality numbers: [docs/benchmarks.md](docs/benchmarks.md).
 
+## qwen fast code
+
+[code/](code/README.md) is **qwen fast code** (`qfc`): the opencode terminal interface, rebranded and built from pinned sources, running on your mac or linux machine against these models. it routes every conversation to the right model by difficulty, keeps sessions running for hours on a local server that every terminal shares, and wakes or pauses the gpu box on its own. `sh code/install.sh` sets up the identical toolchain, binary and services on either system.
+
+## autonomous agent
+
+[agent/](agent/README.md) runs a long running coding agent on your machine on top of the pi sdk, served by qwenfast. it routes every task by complexity: chores go to qwen3.6-35b-a3b, real coding to qwen3.8-27b, and hard problems to qwen3.8-27b at full reasoning effort, escalating whenever an attempt fails its checks. it survives crashes and reboots, resumes interrupted sessions, and wakes or pauses the gpu box on its own.
+
+two engine features make agent turns fast: a turn to turn prefix cache for the hybrid model (a turn at a 75k token context drops from 9.7 s to 0.6 s to first token) and speculative decoding for sampled requests.
+
 ## what is inside
 
 - custom triton gated deltanet kernels: pool indexed recurrent decode, fused causal conv and a fused verify and commit kernel for speculative decoding, at 86 to 87 percent of peak hbm bandwidth.
@@ -29,7 +39,8 @@ full methodology, latency tables and quality numbers: [docs/benchmarks.md](docs/
 - one cuda graph per batch size bucket that captures the entire decode step, sampler included.
 - continuous batching scheduler with chunked prefill, a mixed prefill plus decode step and swap based preemption.
 - mtp speculative decoding with the checkpoint's own draft head and a statistical acceptance gate.
-- openai compatible server: streaming, thinking on and off, hermes tool calls, prometheus metrics, api keys with rate limits and usage metering.
+- openai compatible server: streaming, thinking on and off, qwen3 coder xml and hermes tool calls, prometheus metrics, api keys with rate limits and usage metering.
+- turn to turn prefix cache for agent conversations and speculative sampling for temperature above zero.
 
 architecture walkthrough: [docs/architecture.md](docs/architecture.md). api reference: [docs/api.md](docs/api.md).
 
@@ -90,6 +101,7 @@ pytest
 | `benchmarks/` | serving load harness and the result files behind the tables above |
 | `evals/` | gsm8k and ifeval quality gate |
 | `kernels/microbench/` | standalone kernel microbenchmarks |
+| `agent/` | long running autonomous agent with complexity routing, on the pi sdk |
 | `demo/` | next.js streaming chat demo that proxies to the engine |
 | `scripts/` | gpu box setup, server supervisor and operator tools |
 | `docs/` | architecture, benchmarks and api reference |
