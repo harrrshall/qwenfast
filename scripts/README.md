@@ -7,7 +7,7 @@ helpers for bringing up a gpu box, running the server under a supervisor, drivin
 | script | what it does |
 |---|---|
 | `remote_bootstrap_box.sh` | idempotent bring up of a fresh cuda box: results directory, pinned virtualenv (torch, vllm, flashinfer, triton, fla), cuda 13 toolchain inside the venv, weights download if the download script is present |
-| `remote_download_weights.sh` | downloads the fp8 and bf16 `qwen3.8-27b` checkpoints into the hugging face cache |
+| `remote_download_weights.sh` | downloads checkpoints into the hugging face cache, `MODELS` overrides the default fp8 and bf16 `qwen3.8-27b` pair |
 | `remote_install_vllm.sh` | creates the virtualenv with vllm alone, for baseline runs |
 | `remote_gpu_free.sh` | stops any running server or benchmark and waits until gpu memory is released |
 
@@ -19,6 +19,17 @@ helpers for bringing up a gpu box, running the server under a supervisor, drivin
 | `remote_public_server.sh` | supervised public endpoint: reads api keys from `/home/.secrets`, polls `/health`, restarts the server with backoff, drains in flight streams on stop. configuration through env vars (`MAX_NUM_SEQS`, `MAX_MODEL_LEN`, `MAX_STREAMS_PER_KEY`, `MAX_STREAMS_PER_IP`, `REQUEST_TIMEOUT`, `DRAIN_TIMEOUT`, `LOG_CONTENT`) |
 | `supervisor_lock.sh` | single holder lock used by the supervisor so two copies never fight for the same port. usable as a library or as a command |
 | `smoke_test.sh` | correctness and single stream speed check against a running server (`BASE` and `MODEL` env vars) |
+
+## agent backend
+
+the two model backend for the long running agent in [agent/](../agent/README.md): qwenfast serving qwen3.8-27b on port 8000 and vllm serving qwen3.6-35b-a3b on port 8001, on one h200.
+
+| script | what it does |
+|---|---|
+| `remote_agent_bringup.sh` | fresh or resumed box to serving: downloads only the two fp8 checkpoints, builds the venv, then becomes the stack keeper. idempotent |
+| `remote_agent_stack.sh` | the keeper: starts the big tier first so its pools are allocated, then the small tier, and restarts a supervisor that dies. flags come from env vars (`BIG_SEQS`, `BIG_CTX`, `BIG_KV_PAGES`, `BIG_PREFIX_ENTRIES`, `SMALL_GPU_UTIL`) |
+| `remote_supervise.sh` | per server watchdog: health polls, drain, restart with backoff, log rotation, heartbeat json. kills only its own process group, so two servers can share the gpu |
+| `remote_agent_redeploy_big.sh` | swaps in a freshly uploaded engine and restarts only the big tier |
 
 ## benchmarks
 
