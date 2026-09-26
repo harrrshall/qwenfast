@@ -172,11 +172,12 @@ async def _generate_chat(
     stop_strings: list[str],
     http_request: Optional[Request],
     on_disconnect=None,
+    tools: Optional[list[dict]] = None,
 ) -> AsyncIterator[ChatEvent]:
     loop = asyncio.get_running_loop()
     detok = IncrementalDetokenizer(tokenizer, prompt_ids)
     think = ThinkTagParser(start_in_think=enable_thinking)
-    toolp = ToolCallStreamParser()
+    toolp = ToolCallStreamParser(tools)
     stopmatch = StopStringMatcher(stop_strings)
 
     abort_requested = False
@@ -1319,7 +1320,7 @@ def create_app(
                         async for ev in _generate_chat(
                             engine, tokenizer, executor, request_id, prompt_ids, sp,
                             enable_thinking, stop_strings, http_request,
-                            on_disconnect=_note_disconnect,
+                            on_disconnect=_note_disconnect, tools=req.tools,
                         ):
                             if ev.stats is not None:
                                 last_stats = ev.stats
@@ -1416,7 +1417,7 @@ def create_app(
             try:
                 async for ev in _generate_chat(
                     engine, tokenizer, executor, request_id, prompt_ids, sp, enable_thinking,
-                    stop_strings, http_request,
+                    stop_strings, http_request, tools=req.tools,
                 ):
                     if ev.reasoning_delta:
                         reasoning_accum.append(ev.reasoning_delta)

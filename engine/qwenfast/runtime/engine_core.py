@@ -359,6 +359,11 @@ def run_core(payload: Dict[str, Any]) -> None:
                 "spec_acceptance_rate": s.spec_acceptance_rate if engine.spec is not None else None,
                 "prompt_tokens_total": prompt_tokens_total,
                 "step_busy_pct": trace.step_busy_pct,
+                "prefix_hits": s.prefix_hits,
+                "prefix_lookups": s.prefix_lookups,
+                "prefix_hit_tokens": s.prefix_hit_tokens,
+                "prefix_prompt_tokens": s.prefix_prompt_tokens,
+                "prefix_entries": s.prefix_entries,
             },
         ))
 
@@ -939,5 +944,10 @@ class EngineCoreClient(AsyncEngine):
             ssm_slots_total=int(cs.get("ssm_slots_total", self._ready.get("ssm_slots_total", 0))),
             spec_accept_length=cs.get("spec_accept_length"),
             spec_acceptance_rate=cs.get("spec_acceptance_rate"),
+            prefix_hits=int(cs.get("prefix_hits", 0)),
+            prefix_lookups=int(cs.get("prefix_lookups", 0)),
+            prefix_hit_tokens=int(cs.get("prefix_hit_tokens", 0)),
+            prefix_prompt_tokens=int(cs.get("prefix_prompt_tokens", 0)),
+            prefix_entries=int(cs.get("prefix_entries", 0)),
             uptime_s=uptime,
         )

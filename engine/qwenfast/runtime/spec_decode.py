@@ -68,6 +68,88 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import torch
+
+
+def spec_sample_accept(
+    logits: torch.Tensor,
+    drafts: torch.Tensor,
+    temperature: torch.Tensor,
+    top_p: torch.Tensor,
+    top_k: torch.Tensor,
+    *,
+    candidates: int = 2048,
+    generator: Optional[torch.Generator] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Speculative *sampling* acceptance for a point-mass (argmax) draft.
+
+    ``logits`` ``[B, n, V]`` are the target's logits at the ``n = k + 1``
+    window positions, ``drafts`` ``[B, k]`` the drafted tokens (window
+    positions ``1..k``). The target distribution ``p_j`` at each position is
+    exactly the one :func:`graphs.sample_tokens` samples from (temperature,
+    then top-k and top-p inside the top ``candidates`` logits).
+
+    The draft distribution is a point mass on the draft token ``d``, so the
+    standard rejection rule ``accept with min(1, p(d) / q(d))`` becomes
+    "accept with probability ``p(d)``", and the residual after a rejection,
+    ``norm(max(0, p - q))``, is ``p`` with ``d`` removed. Accepting drafts left
+    to right and sampling the first rejected position from its residual (or
+    the bonus position from ``p_k`` when all ``k`` are accepted) emits tokens
+    distributed exactly as plain sampling would, one at a time.
+
+    Returns ``(tokens [B, n] int32, accepted [B] fp32 in 0..k)``: row ``i``
+    emits ``tokens[i, :accepted[i] + 1]``. Fixed shape, no host sync, no
+    ``multinomial``: safe inside a captured CUDA graph.
+    """
+    b, n, v = logits.shape
+    k = n - 1
+    c = min(int(candidates), v)
+    flat = logits.reshape(b * n, v).float()
+    topv, topi = torch.topk(flat, c, dim=-1, sorted=True)  # [B*n, c]
+
+    def rows(x: torch.Tensor) -> torch.Tensor:  # per request -> per window position
+        return x.to(flat.device, torch.float32).repeat_interleave(n).unsqueeze(-1)
+
+    temp = rows(temperature).clamp(min=1e-5)
+    scaled = topv / temp
+    ar = torch.arange(c, device=flat.device).unsqueeze(0)
+    tk = rows(top_k)
+    tk_eff = torch.where(tk <= 0, torch.full_like(tk, float(c)), tk.clamp(max=float(c)))
+    keep_k = ar < tk_eff
+    probs = torch.softmax(scaled.masked_fill(~keep_k, float("-inf")), dim=-1)
+    cum_excl = probs.cumsum(dim=-1) - probs
+    tp = rows(top_p).clamp(min=1e-5, max=1.0)
+    keep_p = (cum_excl < tp).clone()
+    keep_p[:, 0] = True
+    keep = keep_k & keep_p
+    filtered = scaled.masked_fill(~keep, float("-inf"))
+    p = torch.softmax(filtered, dim=-1)  # [B*n, c]; zero outside the kept set
+
+    filtered = filtered.view(b, n, c)
+    p = p.view(b, n, c)
+    topi = topi.view(b, n, c)
+
+    # p_j(d_{j+1}) for the k drafted positions (0 when d fell outside the kept set)
+    is_d = topi[:, :k, :] == drafts.to(topi.dtype).unsqueeze(-1)  # [B, k, c]
+    p_d = (p[:, :k, :] * is_d).sum(-1)  # [B, k]
+    gen = generator if generator is not None and generator.device == flat.device else None
+    u = torch.rand((b, max(k, 1)), device=flat.device, dtype=torch.float32, generator=gen)[:, :k]
+    ok = (u < p_d).to(torch.float32)
+    accepted = torch.cumprod(ok, dim=1).sum(dim=1) if k > 0 else torch.zeros(b, device=flat.device)
+
+    # one gumbel-max draw per position from its residual: the draft removed at
+    # positions 0..k-1 (only read when that draft was rejected), plain p at k
+    resid = filtered.clone()
+    if k > 0:
+        resid[:, :k, :] = resid[:, :k, :].masked_fill(is_d, float("-inf"))
+    g = torch.rand(resid.shape, device=flat.device, dtype=torch.float32, generator=gen).clamp(min=1e-20, max=1.0 - 1e-7)
+    draw_local = (resid - torch.log(-torch.log(g))).argmax(dim=-1, keepdim=True)  # [B, n, 1]
+    draw = topi.gather(-1, draw_local).squeeze(-1).to(torch.int32)  # [B, n]
+
+    pos = torch.arange(n, device=flat.device).unsqueeze(0)  # [1, n]
+    a = accepted.to(torch.long).unsqueeze(1)  # [B, 1]
+    head = torch.cat([drafts.to(torch.int32), draw[:, -1:]], dim=1)  # drafts at 0..k-1
+    tokens = torch.where(pos < a, head, draw)
+    return tokens.to(torch.int32), accepted
 import torch.nn.functional as F
 
 from ..attn import flashinfer_attn as fi
@@ -470,6 +552,13 @@ class SpecDecoder:
         self.model = model
         self.buf = buf
         self.rt = rt
+        self.sampler_candidates = int(getattr(rt, "sampler_candidates", 2048) or 2048)
+        #: dedicated rng for speculative sampling, registered with every
+        #: captured graph so each replay draws fresh numbers
+        self._generator: Optional[torch.Generator] = None
+        if not cfg.greedy_only and model.device.type == "cuda":
+            self._generator = torch.Generator(device=model.device)
+            self._generator.manual_seed(1)
         self.cfg = cfg
         self.k = cfg.k
         self.n = cfg.n
@@ -676,6 +765,18 @@ class SpecDecoder:
         drafts = self.window_tokens[:bucket, 1:]  # [B, k]
         match = (drafts == tgt[:, : self.k]).to(torch.float32)
         accepted = torch.cumprod(match, dim=1).sum(dim=1)  # [B] in 0..k (fp32)
+        if not self.cfg.greedy_only:
+            # sampled rows use speculative sampling; greedy rows keep the exact
+            # argmax rule above (bit identical to plain greedy decoding)
+            temp = self.buf.temperature[:bucket]
+            s_tok, s_acc = spec_sample_accept(
+                logits.view(bucket, n, -1), drafts, temp,
+                self.buf.top_p[:bucket], self.buf.top_k[:bucket],
+                candidates=self.sampler_candidates, generator=self._generator,
+            )
+            greedy_row = temp <= 0
+            accepted = torch.where(greedy_row, accepted, s_acc)
+            tgt = torch.where(greedy_row.unsqueeze(1), tgt, s_tok)
         m = (accepted + 1).to(torch.int32)
         self.m[:bucket].copy_(m)
         ar = torch.arange(n, device=tgt.device, dtype=torch.int32)
@@ -779,6 +880,8 @@ class SpecDecoder:
             torch.cuda.synchronize()
 
             g = torch.cuda.CUDAGraph()
+            if self._generator is not None:
+                g.register_generator_state(self._generator)
             with torch.cuda.graph(g, pool=self._pool):
                 self._run_step(b)
             self._graphs[b] = g
@@ -793,6 +896,7 @@ class SpecDecoder:
         slots: Sequence[int],
         ctx_lens: Sequence[int],
         last_tokens: Sequence[int],
+        sampling: Optional[Tuple[Sequence[float], Sequence[float], Sequence[float]]] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """One speculative step.
 
@@ -822,6 +926,13 @@ class SpecDecoder:
         self.buf.host["slot_ids"][:bucket] = torch.tensor(slots_p, dtype=torch.int32)
         self.upload(bucket)
         self.buf.upload(["slot_ids"])
+        if not self.cfg.greedy_only:
+            # (temperature, top_p, top_k) per live row; padding rows are greedy
+            temps, tps, tks = sampling if sampling is not None else ([0.0] * batch, [1.0] * batch, [0.0] * batch)
+            self.buf.host["temperature"][:bucket] = torch.tensor(list(temps) + [0.0] * pad, dtype=torch.float32)
+            self.buf.host["top_p"][:bucket] = torch.tensor(list(tps) + [1.0] * pad, dtype=torch.float32)
+            self.buf.host["top_k"][:bucket] = torch.tensor(list(tks) + [0.0] * pad, dtype=torch.float32)
+            self.buf.upload(["temperature", "top_p", "top_k"])
 
         # Re-sync the pool's device-side committed lengths from the host's
         # (authoritative) view before planning: the previous step's speculative

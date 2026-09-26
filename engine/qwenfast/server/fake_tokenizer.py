@@ -27,6 +27,10 @@ _SPECIALS: list[tuple[str, int]] = [
     ("</tool_call>", 6),
 ]
 _SPECIAL_TEXT_TO_ID = dict(_SPECIALS)
+#: Mirrors the real Qwen3.8 tokenizer: `<think>`, `</think>`, `<tool_call>` and `</tool_call>` are
+#: added tokens with `special: false`, so `skip_special_tokens=True` keeps them in the decoded text
+#: (the server's think/tool parsers depend on that). Only these ids are dropped by decode.
+_TRULY_SPECIAL_IDS = frozenset({0, 1, 2})
 _SPECIAL_ID_TO_TEXT = {v: k for k, v in _SPECIALS}
 _FIRST_DYNAMIC_ID = 1000
 
@@ -90,7 +94,7 @@ class FakeTokenizer:
                 piece = self._id_to_piece.get(int(tid))
                 if piece is None:
                     continue
-                if int(tid) in _SPECIAL_ID_TO_TEXT and skip_special_tokens:
+                if int(tid) in _TRULY_SPECIAL_IDS and skip_special_tokens:
                     continue
                 out.append(piece)
         return "".join(out)

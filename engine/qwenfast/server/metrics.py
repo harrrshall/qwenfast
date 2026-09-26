@@ -93,6 +93,12 @@ def render_prometheus_text(stats: EngineStats, extra_lines: list[str] | None = N
             f"{_NAMESPACE}:spec_acceptance_rate", "Fraction of drafted tokens accepted.", stats.spec_acceptance_rate
         )
 
+    if getattr(stats, "prefix_lookups", 0):
+        lines += _gauge(f"{_NAMESPACE}:prefix_cache_hits_total", "Requests resumed from a cached prompt state.", stats.prefix_hits)
+        lines += _gauge(f"{_NAMESPACE}:prefix_cache_lookups_total", "Admissions that looked up the prefix cache.", stats.prefix_lookups)
+        lines += _gauge(f"{_NAMESPACE}:prefix_cache_hit_tokens_total", "Prompt tokens not recomputed thanks to the cache.", stats.prefix_hit_tokens)
+        lines += _gauge(f"{_NAMESPACE}:prefix_cache_prompt_tokens_total", "Prompt tokens of every admission that looked up the cache.", stats.prefix_prompt_tokens)
+        lines += _gauge(f"{_NAMESPACE}:prefix_cache_entries", "Cached prompt states held.", stats.prefix_entries)
     lines += _gauge(f"{_NAMESPACE}:uptime_seconds", "Engine process uptime.", stats.uptime_s)
 
     if extra_lines:

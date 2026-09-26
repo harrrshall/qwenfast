@@ -493,6 +493,52 @@ class PagedKVPool:
         self.seq_len[slot] = 0
         return len(pages)
 
+    def detach_pages(self, slot: int, keep_tokens: int) -> List[int]:
+        """Release ``slot`` like :meth:`free_pages`, but hand the pages that
+        hold its first ``keep_tokens`` tokens to the caller instead of the
+        allocator (the prefix cache keeps them for the next turn of the same
+        conversation). Pages past that prefix go back to the allocator.
+
+        The kept pages are owned by the caller from here on: they are in no
+        slot's page table and not on the free list, so nothing can write them
+        until :meth:`attach_pages` maps them into a slot again (or the caller
+        returns them with ``allocator.free``).
+        """
+        self._check_slot(slot)
+        n = self._n_alloc[slot]
+        pages = [int(p) for p in self.page_table_host[slot, :n].tolist() if p >= 0]
+        keep = min(self.pages_needed(keep_tokens), len(pages))
+        kept, dropped = pages[:keep], pages[keep:]
+        if dropped:
+            self.allocator.free(dropped)
+        self.flush_page_table()
+        self.page_table[slot].fill_(-1)
+        self.page_table_host[slot].fill_(-1)
+        self._n_alloc[slot] = 0
+        self.seq_len[slot] = 0
+        return kept
+
+    def attach_pages(self, slot: int, pages: List[int], length: int) -> None:
+        """Map ``pages`` (from :meth:`detach_pages`) as ``slot``'s leading
+        pages and mark its first ``length`` tokens committed. ``slot`` must
+        hold no pages. Positions past ``length`` inside the last page are stale
+        and get overwritten by the next prefill, exactly as after ``truncate``.
+        """
+        self._check_slot(slot)
+        if self._n_alloc[slot]:
+            raise ValueError(f"attach_pages: slot {slot} already holds {self._n_alloc[slot]} pages")
+        if len(pages) > self.cfg.max_pages_per_seq:
+            raise ValueError(f"attach_pages: {len(pages)} pages > max_pages_per_seq")
+        if self.pages_needed(length) > len(pages):
+            raise ValueError(f"attach_pages: {len(pages)} pages cannot hold {length} tokens")
+        if pages:
+            self.page_table_host[slot, : len(pages)] = torch.tensor(pages, dtype=torch.int32)
+            self._n_alloc[slot] = len(pages)
+            self._pt_dirty.append((slot, 0, len(pages)))
+            if not self._pt_defer:
+                self.flush_page_table()
+        self.seq_len[slot] = length
+
     def _check_slot(self, slot: int) -> None:
         if slot not in self._used_slots:
             raise ValueError(f"slot {slot} is not an allocated sequence slot")

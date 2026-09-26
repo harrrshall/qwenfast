@@ -887,6 +887,16 @@ def add_runtime_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
     rt.add_argument("--no-async-scheduling", dest="async_scheduling",
                     action="store_false",
                     help="harvest every step's tokens inside the step (the default)")
+    rt.add_argument("--spec-sampling", action="store_true",
+                    help="speculative decoding for sampled (temperature > 0) requests too, with "
+                         "exact rejection sampling against the argmax draft; greedy requests are "
+                         "unchanged. off = sampled batches take the plain decode step")
+    rt.add_argument("--prefix-cache-entries", type=int, default=0,
+                    help="turn to turn prefix cache for agent conversations: keep this many "
+                         "prompt-end gdn state snapshots (75 MiB each on qwen3.8-27b) and hand the "
+                         "prompt's kv pages to the next request that extends it. 0 = off")
+    rt.add_argument("--prefix-cache-min-tokens", type=int, default=512,
+                    help="prompts shorter than this are not cached")
     rt.add_argument("--overlap-decode-priority", type=int, default=0,
                     help="CUDA stream priority for the decode half of an overlapped "
                          "step (0 = default, -1 = high)")
@@ -1158,6 +1168,8 @@ def runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
         conv_prefill_layout=args.conv_prefill_layout,
         mlp_tile_tokens=getattr(args, "mlp_tile_tokens", M1_DEFAULTS["mlp_tile_tokens"]),
         prefill_gemm_backend=args.prefill_gemm_backend,
+        prefix_cache_entries=int(getattr(args, "prefix_cache_entries", 0) or 0),
+        prefix_cache_min_tokens=int(getattr(args, "prefix_cache_min_tokens", 512) or 512),
         prefill_chunk_tokens=args.prefill_chunk_tokens,
         mixed_forward=getattr(args, "mixed_forward", M1_DEFAULTS["mixed_forward"]),
         mixed_graphs=getattr(args, "mixed_graphs", M1_DEFAULTS["mixed_graphs"]),
@@ -1306,7 +1318,7 @@ def plan_memory_for(
 
 def _post_capture_check(engine, rt: RuntimeConfig, plan: Dict[str, float],
                         budget: Optional[float], args: argparse.Namespace,
-                        *, verbose: bool = True) -> None:
+                        *, verbose: bool = True, baseline_gib: float = 0.0) -> None:
     """Compare the *measured* post-capture footprint against plan and budget.
 
     Two independent judgements, deliberately not conflated:
@@ -1322,6 +1334,13 @@ def _post_capture_check(engine, rt: RuntimeConfig, plan: Dict[str, float],
     measured = measure_allocation(rt.device)
     if measured is None:
         return
+    if baseline_gib > 0:
+        # Device memory that was already in use before this process loaded
+        # anything (another server sharing the gpu, e.g. the small agent tier)
+        # is not ours: the budget was computed from the free memory at that
+        # moment, so only this process's own growth is compared against it.
+        measured = dict(measured)
+        measured["in_use_gib"] = max(measured["in_use_gib"] - baseline_gib, 0.0)
 
     # Re-plan against the tensors that actually exist. The pre-load plan has to
     # guess the weight and repack byte counts from config.json; here the model
@@ -1389,6 +1408,8 @@ def build_engine_from_args(args: argparse.Namespace, tokenizer=None, *, verbose:
         print(format_memory_plan(plan, rt, args.max_model_len), flush=True)
 
     free_gib = _free_hbm_gib(rt.device)
+    baseline = measure_allocation(rt.device)
+    baseline_gib = baseline["in_use_gib"] if baseline else 0.0
     budget = None
     if free_gib is not None:
         budget = free_gib * args.gpu_memory_utilization
@@ -1422,7 +1443,10 @@ def build_engine_from_args(args: argparse.Namespace, tokenizer=None, *, verbose:
     spec_max_batch: Optional[int] = None
     if args.spec_k > 0:
         spec_max_batch = args.spec_max_batch
-        spec_cfg = SpecConfig(k=args.spec_k, buckets=spec_buckets_for(rt, spec_max_batch))
+        spec_cfg = SpecConfig(
+            k=args.spec_k, buckets=spec_buckets_for(rt, spec_max_batch),
+            greedy_only=not getattr(args, "spec_sampling", False),
+        )
 
     engine = build_async_engine(
         args.model, rt=rt, spec=spec_cfg, spec_max_batch=spec_max_batch, fused_cache=args.fused_cache
@@ -1443,7 +1467,7 @@ def build_engine_from_args(args: argparse.Namespace, tokenizer=None, *, verbose:
     engine.memory_budget_gib = None if args.skip_memory_check else budget
     engine.memory_plan_tolerance = args.memory_plan_tolerance
     engine.post_capture_check = lambda: _post_capture_check(
-        engine, rt, plan, budget, args, verbose=verbose
+        engine, rt, plan, budget, args, verbose=verbose, baseline_gib=baseline_gib
     )
 
     eos = args.eos_token_id

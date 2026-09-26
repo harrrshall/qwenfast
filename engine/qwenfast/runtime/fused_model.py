@@ -695,6 +695,12 @@ class RuntimeConfig:
     #: the host learns it one step late, which costs at most one extra
     #: (discarded) token per request after EOS.  Off by default.
     async_scheduling: bool = False
+    #: Turn to turn prefix cache for agent conversations (``prefix_cache.py``):
+    #: how many prompt-end state snapshots to keep. 0 == off (no memory, no
+    #: code path change). Each snapshot is one slot of ssm + conv state.
+    prefix_cache_entries: int = 0
+    #: Prompts shorter than this are neither snapshotted nor matched.
+    prefix_cache_min_tokens: int = 512
     #: Hard cap on the tokens in one prefill chunk, if
     #: smaller than ``max_num_batched_tokens``. 0 == no separate cap.
     #:

@@ -125,7 +125,7 @@ request fields (all optional except `model` and `messages`):
 | `seed` | int | deterministic sampling |
 | `stream` | bool | server-sent events |
 | `stream_options` | object | `{"include_usage": true}` adds a final usage frame |
-| `tools`, `tool_choice` | array, string or object | hermes-style function calling |
+| `tools`, `tool_choice` | array, string or object | function calling, see [tool calls](#tool-calls) |
 | `chat_template_kwargs` | object | `enable_thinking`, `reasoning_effort`, `preserve_thinking` |
 | `reasoning_effort` | `"xhigh"`, `"medium"`, `"low"` | top-level alias of `chat_template_kwargs.reasoning_effort` |
 | `logprobs`, `top_logprobs` | bool or int | accepted and passed to the engine; the response body does not carry logprobs |
@@ -271,7 +271,7 @@ turning thinking on switches the sampling defaults to the thinking profile.
 
 ## tool calls
 
-pass `tools` in the openai function schema. the chat template renders them in the model's hermes format and the server parses the model's `<tool_call>` blocks back into openai tool calls.
+pass `tools` in the openai function schema. the qwen3.8 chat template asks the model for qwen3 coder xml calls (`<tool_call><function=name><parameter=key>value</parameter></function></tool_call>`), and the server parses them back into openai tool calls, converting each parameter to the json type its schema declares. hermes json calls (`<tool_call>{"name": ..., "arguments": {...}}</tool_call>`) are accepted too. tool call arguments sent back in `messages` may be the usual json string; the server turns them into the object the template needs, maps a `developer` role to `system`, and folds later system messages into the first one.
 
 ```json
 {

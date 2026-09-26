@@ -60,6 +60,7 @@ from typing import Deque, Dict, List, Optional, Sequence, Tuple
 
 import torch
 
+from .prefix_cache import PrefixCache
 from .fused_model import (
     FusedQwenForCausalLM,
     RuntimeConfig,
@@ -232,6 +233,12 @@ class SchedulerStats:
     # Speculative decoding telemetry. 0.0 when spec decoding is off.
     spec_accept_length: float = 0.0
     spec_acceptance_rate: float = 0.0
+    # Prefix cache telemetry (all 0 when the cache is off).
+    prefix_hits: int = 0
+    prefix_lookups: int = 0
+    prefix_hit_tokens: int = 0
+    prefix_prompt_tokens: int = 0
+    prefix_entries: int = 0
 
 
 # =========================================================================== #
@@ -343,6 +350,15 @@ class Scheduler:
         self.running: Dict[int, Request] = {}
         self.slots = SlotManager(model.n_slots)
         self._swapped: Dict[str, _SwapState] = {}
+        #: Turn to turn prefix cache (``prefix_cache.py``); ``None`` keeps
+        #: every code path byte identical to the cache-less scheduler.
+        self.prefix_cache: Optional[PrefixCache] = None
+        n_prefix = int(getattr(rt, "prefix_cache_entries", 0) or 0)
+        if n_prefix > 0:
+            self.prefix_cache = PrefixCache(
+                model, spec, n_entries=n_prefix,
+                min_tokens=int(getattr(rt, "prefix_cache_min_tokens", 512) or 512),
+            )
         self._aborted: set = set()
         self._decode_steps_since_prefill = 0
         self._prefill_progressed = False  # set fresh at the top of every _run_prefill_step
@@ -520,6 +536,16 @@ class Scheduler:
             kv_pages_total=self.model.kv_pool.cfg.n_pages,
             spec_accept_length=(self.spec.stats()["spec_accept_length"] if self.spec else 0.0),
             spec_acceptance_rate=(self.spec.stats()["spec_acceptance_rate"] if self.spec else 0.0),
+            **self._prefix_stats(),
+        )
+
+    def _prefix_stats(self) -> Dict[str, int]:
+        if self.prefix_cache is None:
+            return {}
+        st = self.prefix_cache.snapshot_stats()
+        return dict(
+            prefix_hits=st.hits, prefix_lookups=st.lookups, prefix_hit_tokens=st.hit_tokens,
+            prefix_prompt_tokens=st.prompt_tokens, prefix_entries=st.entries,
         )
 
     def _watermark_pages(self, remaining_tokens: int) -> int:
@@ -542,6 +568,14 @@ class Scheduler:
         base = req.num_computed_tokens if req.num_computed_tokens > 0 else len(req.prompt_token_ids)
         remaining = max(req.params.max_tokens - self._emitted_or_pending(req), 0)
         need_pages = self.model.kv_pool.pages_needed(base) + self._watermark_pages(remaining)
+        pc = self.prefix_cache
+        if pc is not None and self.model.kv_pool.num_free_pages < need_pages:
+            # cached prefixes are the first memory to give back: a hit brings
+            # its own pages, every other entry may be evicted to make room
+            hit = pc.lookup(req.prompt_token_ids, count=False) if req.num_computed_tokens == 0 else None
+            if hit is not None:
+                need_pages -= len(hit.pages)
+            pc.reclaim_pages(need_pages, keep=hit)
         return self.model.kv_pool.num_free_pages >= need_pages
 
     # -- top-level step ---------------------------------------------------- #
@@ -1010,6 +1044,12 @@ class Scheduler:
                 self.model.reset_slot(req.slot)
                 if self.spec is not None:
                     self.spec.reset_slot(req.slot)
+                if self.prefix_cache is not None and req.num_computed_tokens == 0:
+                    hit = self.prefix_cache.lookup(req.prompt_token_ids)
+                    if hit is not None:
+                        req.num_computed_tokens = self.prefix_cache.restore(
+                            hit, req.slot, self.model.kv_pool
+                        )
 
             remaining_prompt = len(req.prompt_token_ids) - req.num_computed_tokens
             if remaining_prompt <= 0:
@@ -1100,6 +1140,10 @@ class Scheduler:
         for i, req in enumerate(chunk_reqs):
             if req.status != STATUS_DECODING:
                 continue  # more prefill chunks still needed for this request
+            if self.prefix_cache is not None:
+                # every caller reaches here after launching the forward that
+                # consumed the last prompt token, on the stream that ran it
+                self.prefix_cache.snapshot(req.request_id, req.slot, len(req.prompt_token_ids))
             if req.params.max_tokens <= 0:
                 self._finish(req, "length")
                 events.append(StepEvent(req, [], True, "length"))
@@ -1928,7 +1972,12 @@ class Scheduler:
         ctx_lens = [r.num_computed_tokens for r in reqs]
         last_tokens = [int(r.last_token) for r in reqs]
 
-        out_window, m = spec.step(batch, slots, ctx_lens, last_tokens)
+        sampling = (
+            [r.params.temperature for r in reqs],
+            [r.params.top_p for r in reqs],
+            [float(r.params.top_k) for r in reqs],
+        )
+        out_window, m = spec.step(batch, slots, ctx_lens, last_tokens, sampling=sampling)
         rows = out_window[:batch].to("cpu").tolist()
         ms = m[:batch].to("cpu").tolist()
         spec.note_step(ms)
@@ -1980,7 +2029,16 @@ class Scheduler:
             # row back into the pool's own `_free_slots` and out of
             # `_used_slots`, so the *next* `ensure_capacity` on that recycled
             # slot would raise "slot N is not an allocated sequence slot".
-            self.model.kv_pool.free_pages(req.slot)
+            kept = False
+            if self.prefix_cache is not None:
+                if req.num_computed_tokens >= len(req.prompt_token_ids):
+                    kept = self.prefix_cache.commit(
+                        req.request_id, req.prompt_token_ids, req.slot, self.model.kv_pool
+                    )
+                else:
+                    self.prefix_cache.drop_pending(req.request_id)
+            if not kept:
+                self.model.kv_pool.free_pages(req.slot)
             self.slots.free(req.slot)
             self.running.pop(req.slot, None)
             req.slot = None
@@ -1994,6 +2052,8 @@ class Scheduler:
         while self.waiting:
             r = self.waiting.popleft()
             if r.request_id in self._aborted:
+                if self.prefix_cache is not None:
+                    self.prefix_cache.drop_pending(r.request_id)
                 if r.slot is not None:
                     self.model.kv_pool.free_pages(r.slot)
                     self.slots.free(r.slot)
@@ -2031,6 +2091,8 @@ class Scheduler:
             return False
         have = pool.pages_allocated(req.slot)
         extra = max(need_pages - have, 0)
+        if self.prefix_cache is not None and pool.num_free_pages < extra:
+            self.prefix_cache.reclaim_pages(extra)
         guard = 0
         max_guard = len(self.running) + 1
         while pool.num_free_pages < extra and guard < max_guard:

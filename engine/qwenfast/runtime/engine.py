@@ -419,6 +419,11 @@ class QwenFastEngine(AsyncEngine):
             # only emits it when not `None`).
             spec_accept_length=s.spec_accept_length if self.spec is not None else None,
             spec_acceptance_rate=s.spec_acceptance_rate if self.spec is not None else None,
+            prefix_hits=s.prefix_hits,
+            prefix_lookups=s.prefix_lookups,
+            prefix_hit_tokens=s.prefix_hit_tokens,
+            prefix_prompt_tokens=s.prefix_prompt_tokens,
+            prefix_entries=s.prefix_entries,
             uptime_s=uptime,
         )
 

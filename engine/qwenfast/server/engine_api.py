@@ -192,6 +192,12 @@ class EngineStats:
     ssm_slots_total: int = 0
     spec_accept_length: Optional[float] = None
     spec_acceptance_rate: Optional[float] = None
+    # turn to turn prefix cache (0 when off)
+    prefix_hits: int = 0
+    prefix_lookups: int = 0
+    prefix_hit_tokens: int = 0
+    prefix_prompt_tokens: int = 0
+    prefix_entries: int = 0
     uptime_s: float = 0.0
 
 
