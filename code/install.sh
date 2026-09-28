@@ -102,7 +102,9 @@ say "services"
 sh "$QFC_HOME/services.sh" install
 sh "$QFC_HOME/services.sh" restart
 
-mkdir -p "$HOME/.local/bin"
+mkdir -p "$QFC_HOME/daemon/bin" "$HOME/.local/bin"
+cp "$REPO/agent/bin/qfa" "$QFC_HOME/daemon/bin/qfa" && chmod +x "$QFC_HOME/daemon/bin/qfa"
 ln -sfn "$QFC_HOME/bin/qfc" "$HOME/.local/bin/qfc"
+ln -sfn "$QFC_HOME/daemon/bin/qfa" "$HOME/.local/bin/qfa"
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "add ~/.local/bin to your PATH to use qfc" ;; esac
 say "done: run 'qfc status', then 'qfc' in any project"

@@ -1,8 +1,13 @@
 #!/bin/sh
-# The two model agent backend on one h200, kept alive for days.
+# the two model agent backend on one gpu, kept alive for days.
 #
-#   big   port 8000  qwenfast serving Qwen3.8-27B-FP8        (hard tasks, thinking on)
-#   small port 8001  vllm serving Qwen3.6-35B-A3B-FP8         (easy tasks, 3B active, fast)
+#   big   port 8000  qwenfast serving qwen3.8-27b-fp8        (hard tasks, thinking on)
+#   small port 8001  vllm serving qwen3.6-35b-a3b-fp8        (easy tasks, 3b active, fast)
+#
+# on a jarvislabs box (the /home layout remote_agent_bringup.sh creates) it needs no settings.
+# anywhere else it uses this checkout's engine, the active python environment, the hugging face
+# cache and ~/.qwenfast for its key and state; override with ENGINE_DIR, VENV, HF_HOME,
+# SECRETS_DIR and BASE. the key the clients use goes in $SECRETS_DIR/agent_key.
 #
 # start with `jl run --on <id> --no-follow -- sh /home/remote_agent_stack.sh`. idempotent: a
 # second copy finds the supervisors' locks held and just becomes another keeper, which exits
@@ -16,10 +21,17 @@
 # the small one is launched, so each always finds its share free, also after a lone restart.
 
 set -u
-SECRETS_DIR=${SECRETS_DIR:-/home/.secrets}
-BASE=${BASE:-/home/qwenfast-results/agent}
+HERE=$(cd "$(dirname "$0")" && pwd)
+if [ -d /home/qwenfast-results ]; then JL_LAYOUT=1; else JL_LAYOUT=0; fi
+if [ $JL_LAYOUT = 1 ]; then
+  SECRETS_DIR=${SECRETS_DIR:-/home/.secrets}; BASE=${BASE:-/home/qwenfast-results/agent}
+  VENV=${VENV:-/home/venv_vllm}; ENGINE_DIR=${ENGINE_DIR:-/home/engine}; export HF_HOME=${HF_HOME:-/home/hf}
+else
+  SECRETS_DIR=${SECRETS_DIR:-$HOME/.qwenfast/secrets}; BASE=${BASE:-$HOME/.qwenfast/state}
+  VENV=${VENV:-${VIRTUAL_ENV:-}}; ENGINE_DIR=${ENGINE_DIR:-$HERE/../engine}; export HF_HOME=${HF_HOME:-$HOME/.cache/huggingface}
+fi
 mkdir -p "$BASE"
-. /home/supervisor_lock.sh
+. "$HERE/supervisor_lock.sh"
 KLOG="$BASE/keeper.log"
 klog() { printf '%s keeper: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$KLOG"; }
 
@@ -34,13 +46,16 @@ KEYS_JSON="$SECRETS_DIR/agent_keys.json"
 # qwenfast reads a keys file (never a key on the command line, where ps would show it)
 ( umask 077; python3 -c 'import json,sys; print(json.dumps({"keys":[{"key":open(sys.argv[1]).read().strip(),"name":"agent","admin":True}]}))' "$KEY_FILE" > "$KEYS_JSON" )
 
-. /home/venv_vllm/bin/activate
-export PYTHONPATH=/home/engine HF_HOME=/home/hf HF_HUB_OFFLINE=1 VLLM_USE_DEEP_GEMM=0
-export CUDA_HOME=/home/venv_vllm/lib/python3.10/site-packages/nvidia/cu13
-export PATH=$CUDA_HOME/bin:$PATH
+[ -n "$VENV" ] && [ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
+ENGINE_DIR=$(cd "$ENGINE_DIR" && pwd)
+export PYTHONPATH=$ENGINE_DIR HF_HUB_OFFLINE=1 VLLM_USE_DEEP_GEMM=0
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# a cuda 13 toolchain shipped inside the venv (see remote_bootstrap_box.sh) is what flashinfer jit needs
+for cu in "${VENV:-/nonexistent}"/lib/python3*/site-packages/nvidia/cu13; do
+  [ -d "$cu" ] && export CUDA_HOME=$cu PATH=$cu/bin:$PATH
+done
 
-snap() { ls -d "/home/hf/hub/models--$1/snapshots"/*/ 2>/dev/null | head -1; }
+snap() { ls -d "$HF_HOME/hub/models--$1/snapshots"/*/ 2>/dev/null | head -1; }
 BIG_MODEL=$(snap Qwen--Qwen3.8-27B-FP8)
 SMALL_MODEL=$(snap Qwen--Qwen3.6-35B-A3B-FP8)
 [ -n "$BIG_MODEL" ] || { klog "FATAL: big weights missing"; exit 2; }
@@ -87,7 +102,7 @@ sup_alive() { lock_alive "$BASE/$1/supervisor.lock" 2>/dev/null; }
 start_sup() {
   name=$1; port=$2; script=$3; grace=$4
   NAME=$name PORT=$port LOG_DIR="$BASE/$name" STARTUP_GRACE=$grace WARMUP_CMD="$WARM" \
-    setsid sh /home/remote_supervise.sh sh "$BASE/$script" < /dev/null >> "$KLOG" 2>&1 &
+    setsid sh "$HERE/remote_supervise.sh" sh "$BASE/$script" < /dev/null >> "$KLOG" 2>&1 &
   klog "started $name supervisor (pid $!)"
 }
 healthy() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$1/health")" = "200" ]; }

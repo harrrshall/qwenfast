@@ -20,7 +20,7 @@ import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager
 import type { Backend } from "./backend.ts";
 import type { Config, EndpointName, TierName } from "./config.ts";
 import { tierModel } from "./models.ts";
-import { escalate, LADDER, route, type Judge } from "./router.ts";
+import { escalate, route, type Judge } from "./router.ts";
 import type { Attempt, Task, TaskStore } from "./store.ts";
 
 export const AUTONOMY_PROMPT = `You are running as an autonomous agent. No human is watching and nobody will answer questions.
@@ -385,4 +385,3 @@ export class Runner {
   }
 }
 
-export { LADDER };

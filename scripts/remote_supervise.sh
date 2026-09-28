@@ -16,7 +16,7 @@ set -u
 
 NAME=${NAME:?NAME is required}
 PORT=${PORT:?PORT is required}
-LOG_DIR=${LOG_DIR:-/home/qwenfast-results/agent/$NAME}
+LOG_DIR=${LOG_DIR:?LOG_DIR is required}
 HEALTH_PATH=${HEALTH_PATH:-/health}
 HEALTH_INTERVAL=${HEALTH_INTERVAL:-10}
 HEALTH_FAIL_LIMIT=${HEALTH_FAIL_LIMIT:-6}
@@ -28,7 +28,7 @@ LOG_MAX_BYTES=${LOG_MAX_BYTES:-52428800}
 LOG_KEEP=${LOG_KEEP:-5}
 WARMUP_CMD=${WARMUP_CMD:-}
 LOCK_DIR=${LOCK_DIR:-$LOG_DIR/supervisor.lock}
-LOCK_LIB=${LOCK_LIB:-/home/supervisor_lock.sh}
+LOCK_LIB=${LOCK_LIB:-$(cd "$(dirname "$0")" && pwd)/supervisor_lock.sh}
 
 HEARTBEAT="$LOG_DIR/heartbeat.json"
 SERVER_LOG="$LOG_DIR/server.log"

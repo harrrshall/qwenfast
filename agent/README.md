@@ -7,11 +7,11 @@ a long running autonomous coding agent on top of the [pi](https://github.com/ear
 ```
 your mac                                             jarvislabs h200 (one box)
 ┌────────────────────────────────────┐               ┌─────────────────────────────────────────┐
-│ launchd  ai.qwenfast.agent         │               │ keeper  remote_agent_stack.sh           │
+│ service  ai.qwenfast.agent         │               │ keeper  remote_agent_stack.sh           │
 │  └ daemon (node, pi sdk)           │   https       │  ├ supervisor big   :8000               │
 │     ├ router  small│medium│large   │ ───────────▶  │  │   qwenfast  qwen3.8-27b fp8          │
 │     ├ runner  pi agent sessions    │               │  │   mtp spec decode, prefix cache      │
-│     ├ store   ~/.qwenfast-agent    │               │  └ supervisor small :8001               │
+│     ├ store   ~/.qwenfast-code     │               │  └ supervisor small :8001               │
 │     └ backend health, resume, idle │ ◀── jl cli ── │      vllm  qwen3.6-35b-a3b fp8          │
 └────────────────────────────────────┘               └─────────────────────────────────────────┘
 ```
@@ -34,9 +34,9 @@ an attempt that ends blocked, fails its `verify` command, errors or times out es
 
 ## reliability
 
-- every task transition is an atomic file write under `~/.qwenfast-agent/tasks/<id>/`
+- every task transition is an atomic file write under `~/.qwenfast-code/agent/tasks/<id>/`
 - a daemon killed mid task continues the interrupted pi session when it restarts
-- launchd restarts the daemon on crash, login and reboot, and idle sleep is held off while it runs
+- launchd or systemd restarts the daemon on crash, login and reboot, and on macos idle sleep is held off while it runs
 - pi retries provider errors with backoff, and an unreachable backend puts tasks on hold until it is back
 - model traffic goes through a supervised ssh tunnel to the box (`127.0.0.1:18000` and `18001`). the jarvislabs https proxy closes any response after about two minutes, which would cut long thinking turns; it stays as the fallback path
 - health probes use a fresh connection and need two failures in a row, so a proxy blip never stalls the queue
@@ -52,22 +52,18 @@ qwenfast keeps a turn to turn prefix cache for agent conversations. each prompt 
 
 ## install
 
-requirements: node 24 or newer, the `jl` cli logged in to jarvislabs, and a box brought up with `scripts/remote_agent_bringup.sh` (its id in `.secrets/agent_box_id`, the shared key in `.secrets/agent_key`).
+`sh code/install.sh` (see [qwen fast code](../code/README.md)) installs the daemon together with qwen fast code: it runs under launchd on macos and `systemd --user` on linux, keeps its state in `~/.qwenfast-code/agent` and puts `qfa` on your path. to run it from this checkout while developing:
 
 ```bash
 cd agent && npm ci
-sh launchd/install.sh          # runs from ~/.qwenfast-agent/app, rerun after changing src/
-curl -s http://127.0.0.1:7788/health
+QFA_HOME=/tmp/qfa QFA_BIG_URL=http://<gpu host>:8000 QFA_SMALL_URL=http://<gpu host>:8001 QFA_API_KEY=<key> QFA_JARVIS=0 node src/daemon.ts
 ```
 
-`sh launchd/uninstall.sh` removes the service. tasks stay on disk.
-
-a launchd job may not read `~/Desktop`, `~/Documents` or `~/Downloads`, so the installer copies the app and its secrets into `~/.qwenfast-agent`. to let tasks work in projects under those folders, give node full disk access in system settings.
+a launchd job may not read `~/Desktop`, `~/Documents` or `~/Downloads`. to let background tasks work in projects there, give `~/.qwenfast-code/toolchain/node/bin/node` full disk access in system settings.
 
 ## use
 
 ```bash
-alias qfa="node $PWD/src/cli.ts"
 qfa submit "add a --json flag to the export command and a test for it" --cwd ~/code/app --verify "pytest -q"
 qfa submit "how many python files are in this repo?" --cwd ~/code/app --wait
 qfa ls running
@@ -76,7 +72,7 @@ qfa cancel <id>
 qfa health
 ```
 
-or drop a file into `~/.qwenfast-agent/inbox/`:
+or drop a file into `~/.qwenfast-code/agent/inbox/`:
 
 ```
 cwd: /Users/me/code/app
@@ -90,7 +86,7 @@ http api on `127.0.0.1:7788`: `POST /tasks`, `GET /tasks`, `GET /tasks/<id>`, `G
 
 ## configuration
 
-`~/.qwenfast-agent/config.json` overrides the defaults in [src/config.ts](src/config.ts), for example:
+`~/.qwenfast-code/agent/config.json` overrides the defaults in [src/config.ts](src/config.ts), for example:
 
 ```json
 {

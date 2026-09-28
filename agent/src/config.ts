@@ -124,7 +124,7 @@ export function deepMerge<T>(base: T, over: unknown): T {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const home = resolve(env.QFA_HOME ?? join(homedir(), ".qwenfast-agent"));
+  const home = resolve(env.QFA_HOME ?? join(homedir(), ".qwenfast-code", "agent"));
   let cfg = defaultConfig(home);
   const file = join(home, "config.json");
   if (existsSync(file)) cfg = deepMerge(cfg, JSON.parse(readFileSync(file, "utf8")));

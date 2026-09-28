@@ -1,2 +1,7 @@
 #!/bin/sh
-exec node "$(dirname "$(readlink -f "$0")")/../src/cli.ts" "$@"
+# qfa: client for the agent daemon (see src/cli.ts). uses the node qwen fast code installed, or
+# node from PATH when run from a checkout.
+HERE=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+NODE=${QFC_HOME:-$HOME/.qwenfast-code}/toolchain/node/bin/node
+[ -x "$NODE" ] || NODE=node
+exec "$NODE" "$HERE/src/cli.ts" "$@"

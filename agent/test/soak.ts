@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const BASE = process.env.QFA_URL ?? "http://127.0.0.1:7788";
-const HOME = process.env.QFA_HOME ?? join(homedir(), ".qwenfast-agent");
+const HOME = process.env.QFA_HOME ?? join(homedir(), ".qwenfast-code", "agent");
 const arg = (k: string, d: number) => {
   const i = process.argv.indexOf(`--${k}`);
   return i > 0 ? Number(process.argv[i + 1]) : d;

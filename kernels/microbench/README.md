@@ -9,13 +9,13 @@ all shapes are taken from `engine/reference/config-Qwen3.8-27B-FP8.json` and cro
 | file | benchmarks |
 |---|---|
 | `common.py` | shared shapes, cuda-event timing, json and markdown output, the `safe_run` wrapper. not runnable on its own |
-| `gdn_decode_bench.py` | one decode step of the gated-deltanet recurrence: `fla` `fused_recurrent_gated_delta_rule` with fp32, bf16 and fp16 state, a pure-torch reference at small batch for correctness, `causal_conv1d_update`, and a best-effort cuLA probe. batch sweep 1 to 512 |
+| `gdn_decode_bench.py` | one decode step of the gated-deltanet recurrence: `fla` `fused_recurrent_gated_delta_rule` with fp32, bf16 and fp16 state, a pure-torch reference at small batch for correctness, `causal_conv1d_update`, and a best-effort `cuLA` probe. batch sweep 1 to 512 |
 | `gdn_prefill_bench.py` | chunked prefill with `fla` `chunk_gated_delta_rule` (torch fallback if `fla` is absent) over sequence lengths 512, 2048 and 8192 at batch 1. reports ms, tflop/s from an analytical flop count, and the hbm-bound floor |
 | `attn_decode_bench.py` | flashinfer paged-kv batch decode for the attention layers (24 query heads, 4 kv heads, head dim 256): batch sweep x context 2048 and 8192 x kv dtype fp16 and fp8 |
 | `gemm_bench.py` | every distinct weight gemm shape (gated-deltanet in and out projections, attention q/k/v/o, mlp gate/up/down, lm_head) x batch sweep x bf16, fp8 per-tensor, fp8 block-128 (vllm triton), fp8 cutlass (vllm), plus a whole-model per-decode-step total |
 | `merge_results.py` | combines the four outputs into one `microbench-<ts>.json` and `.md`. pure file io |
 | `run_all.sh` | runs the four scripts and the merge |
-| `setup_remote.sh` | installs `flash-linear-attention`, `causal-conv1d` and (best effort) cuLA into a venv |
+| `setup_remote.sh` | installs `flash-linear-attention`, `causal-conv1d` and (best effort) `cuLA` into a venv |
 
 ## running
 
@@ -64,7 +64,7 @@ each per-script json holds an `env` block (torch, cuda, gpu name, library versio
 
 every variant runs inside `common.safe_run`, which catches all exceptions and stores the error in that variant's slot. a missing optional package (`fla`, `causal_conv1d`, `flashinfer`, `vllm`, `cula`) never aborts a sweep; the script still writes its json and exits 0. the only non-zero exit is cuda being unavailable.
 
-cuLA and the vllm cutlass path get one more tier: they are probed against a short list of plausible entrypoints and report `"status": "unavailable"` with the attempts when none matched.
+`cuLA` and the vllm cutlass path get one more tier: they are probed against a short list of plausible entrypoints and report `"status": "unavailable"` with the attempts when none matched.
 
 ## reading the numbers
 
@@ -75,7 +75,7 @@ cuLA and the vllm cutlass path get one more tier: they are probed against a shor
 ## caveats
 
 - the prefill flop count is analytical and implementation-invariant for the same algorithm; a fused kernel that uses a different chunk size or skips the ut transform will read as a different tflop/s.
-- cuLA exposes kda and lightning attention entrypoints whose gate parameterization differs from gated-deltanet; a successful probe is labelled as a caveat and should be numerically checked before its speed is compared.
+- `cuLA` exposes kda and lightning attention entrypoints whose gate parameterization differs from gated-deltanet; a successful probe is labelled as a caveat and should be numerically checked before its speed is compared.
 - `gemm_bench.py`'s fp8 block-128 and cutlass variants call vllm internals (`vllm.model_executor.layers.quantization.utils.fp8_utils.w8a8_triton_block_scaled_mm`, `vllm._custom_ops`) that can change signature between vllm releases; the suite was written against vllm 0.28.0.
 - `attn_decode_bench.py`'s fp8 kv path uses an implicit scale of 1, which measures the storage bandwidth and kernel path correctly and is not a numerics test.
 

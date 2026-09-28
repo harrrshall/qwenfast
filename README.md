@@ -1,111 +1,119 @@
 # qwenfast
 
-a custom inference engine for `qwen3.8-27b`, written from scratch in pytorch, triton and flashinfer, and benchmarked head to head against vllm on a single h200.
+a fast inference engine for `qwen3.8-27b` and the coding agent that runs on it.
 
-qwen3.8-27b is a hybrid model: 48 gated deltanet layers, 16 gated gqa attention layers and a multi token prediction head, shipped as an fp8 checkpoint. qwenfast serves it through an openai compatible api with continuous batching, cuda graph decode, chunked prefill and speculative decoding.
+- **engine**: a from scratch server for the hybrid qwen3.8-27b in pytorch, triton and flashinfer, with an openai compatible api, speculative decoding and a prefix cache built for agent conversations
+- **qwen fast code** (`qfc`): the opencode terminal interface running on your mac or linux machine against your own qwen models, routing every conversation to the model that fits it
+- **agent daemon**: a local gateway and background task runner that keeps sessions alive for hours, wakes the gpu when you start working and pauses it when you stop
 
-## results
+```
+your machine                                                     gpu server
+┌──────────────────────────────────────────────────────────┐     ┌────────────────────────────┐
+│ qfc tui ──┐                                              │     │ qwenfast   qwen3.8-27b     │
+│ qfc tui ──┼─▶ qfc server :4097 ─▶ gateway :7788 ─── ssh ─┼────▶│ vllm       qwen3.6-35b-a3b │
+│ qfc run ──┘   sessions, tools     routing, tunnel,       │     │ watchdogs and keeper       │
+│               and agents          gpu wake and pause     │     └────────────────────────────┘
+└──────────────────────────────────────────────────────────┘
+```
 
-served throughput on one h200, 2000 token prompts, 500 output tokens, same checkpoint and prompts for both engines. vllm 0.28.0 runs its best configuration (fp8 weights with deepgemm). qwenfast runs `--preset fastest --spec-k 3 --spec-max-batch 16 --mixed-forward --mixed-graphs --overlap --overlap-min-fill 0.75 --prefill-chunk-tokens 8192 --detok-workers 0 --async-scheduling`.
+## quick start
+
+**use qwen fast code.** on macos or linux, with a c++ toolchain installed (`xcode-select --install` on macos, `build-essential` on debian and ubuntu):
+
+```bash
+git clone https://github.com/harrrshall/qwenfast && cd qwenfast
+QFC_API_KEY=<key> QFC_BIG_URL=http://<gpu host>:8000 QFC_SMALL_URL=http://<gpu host>:8001 sh code/install.sh
+qfc status        # models, routing and server health
+qfc               # open the tui in the current project
+```
+
+the installer downloads a pinned, checksum verified toolchain, builds `qfc` from a pinned opencode release and starts two background services. any openai compatible servers work as the backend; the next step serves the intended ones.
+
+**serve the models.** on a linux machine with an h200 (or any gpu with about 140 gb of memory for both models), cuda 13 and python 3.10 or newer:
+
+```bash
+python -m venv .venv && . .venv/bin/activate && pip install -r engine/requirements.txt
+hf download Qwen/Qwen3.8-27B-FP8 && hf download Qwen/Qwen3.6-35B-A3B-FP8
+mkdir -p ~/.qwenfast/secrets && python -c "import secrets; print(secrets.token_urlsafe(32))" > ~/.qwenfast/secrets/agent_key
+sh scripts/remote_agent_stack.sh      # qwenfast on :8000, vllm on :8001, both supervised
+```
+
+the key in `~/.qwenfast/secrets/agent_key` is the `QFC_API_KEY` for the install above. `scripts/remote_agent_bringup.sh` does all of this on a fresh [jarvislabs](https://jarvislabs.ai) box. with `.secrets/agent_key` and `.secrets/agent_box_id` in the checkout, the gateway manages that box itself: it resumes a paused box when you start working, reaches it through an ssh tunnel and pauses it after an idle hour.
+
+**serve only the engine.**
+
+```bash
+PYTHONPATH=engine python -m qwenfast.runtime.serve \
+  --model /path/to/Qwen3.8-27B-FP8 --served-model-name qwen3.8-27b \
+  --preset fastest --spec-k 3 --spec-sampling --prefix-cache-entries 16 \
+  --mixed-forward --mixed-graphs --overlap --async-scheduling \
+  --max-num-seqs 24 --max-model-len 131072 --n-kv-pages 20480 --host 0.0.0.0 --port 8000
+```
+
+## routing
+
+qwen fast code defaults to the `auto` model. the gateway routes each conversation to one of three tiers:
+
+| tier | model | thinking | used for |
+|---|---|---|---|
+| small | qwen3.6-35b-a3b, 3b active | off | lookups, small edits, summaries, session titles |
+| medium | qwen3.8-27b | medium effort | features, fixes and tests |
+| large | qwen3.8-27b | xhigh effort | debugging, design, refactors, performance |
+
+the split follows the published scores: qwen3.8-27b reaches 61.7 on swe-bench pro and 73.0 on terminal-bench 2.1, and qwen3.6-35b-a3b reaches 49.5 and 51.5 (2.0) while activating a ninth of the weights per token. a lexical score of the typed message decides clear cases and the small model grades borderline ones. a conversation keeps the highest tier it has needed, that memory survives restarts, and a turn that keeps looping on the small tier moves up to medium.
+
+## performance
+
+engine throughput on one h200 against vllm 0.28.0 in its best configuration, 2000 token prompts and 500 output tokens:
 
 | concurrency | vllm out tok/s | qwenfast out tok/s | ratio |
 |---|---|---|---|
 | 1 | 97 | 137 | 1.41x |
 | 8 | 604 | 642 | 1.06x |
 | 32 | 1509 | 1035 | 0.69x |
-| 64 | 1914 | 1448 | 0.76x |
-| 128 | 2201 | 1740 | 0.79x |
 | 256 | 2251 | 1870 | 0.83x |
 
-qwenfast leads at low concurrency, where speculative decoding amortizes the weight bandwidth floor, and has a lower median time to first token at 1, 8, 32 and 256 streams. vllm leads in aggregate throughput from 32 concurrent streams up, where the qwenfast serving path spends its time in host side scheduling of prefill. every kernel measured in isolation is faster in qwenfast. output quality matches on gsm8k and ifeval.
+qwenfast leads at low concurrency, which is where an interactive agent spends its time. vllm leads in aggregate throughput from 32 streams up. quality matches on gsm8k and ifeval. methodology and latency tables are in [docs/benchmarks.md](docs/benchmarks.md).
 
-full methodology, latency tables and quality numbers: [docs/benchmarks.md](docs/benchmarks.md).
+agent specific gains:
 
-## qwen fast code
+| | before | after |
+|---|---|---|
+| time to first token, turn at a 75k token context | 9.7 s | 0.6 s |
+| decode, sampled thinking, one stream | 65 tok/s | 123 tok/s |
 
-[code/](code/README.md) is **qwen fast code** (`qfc`): the opencode terminal interface, rebranded and built from pinned sources, running on your mac or linux machine against these models. it routes every conversation to the right model by difficulty, keeps sessions running for hours on a local server that every terminal shares, and wakes or pauses the gpu box on its own. `sh code/install.sh` sets up the identical toolchain, binary and services on either system.
+the first comes from the prefix cache. 48 of the 64 layers are gated deltanet, whose recurrent state cannot be sliced at an arbitrary token, so each prompt snapshots that state where it ends and the next turn of the conversation resumes from it. the second comes from speculative sampling: the mtp draft is exact rejection sampled against the target distribution, so sampled output keeps its distribution.
 
-## autonomous agent
+## how the engine works
 
-[agent/](agent/README.md) runs a long running coding agent on your machine on top of the pi sdk, served by qwenfast. it routes every task by complexity: chores go to qwen3.6-35b-a3b, real coding to qwen3.8-27b, and hard problems to qwen3.8-27b at full reasoning effort, escalating whenever an attempt fails its checks. it survives crashes and reboots, resumes interrupted sessions, and wakes or pauses the gpu box on its own.
+- triton gated deltanet kernels for recurrent decode, fused causal conv and a fused verify and commit step for speculative decoding, at 86 to 87 percent of peak hbm bandwidth
+- fp8 weights with per shape gemm dispatch across marlin, deepgemm, cutlass and flashinfer, chosen from a measured table
+- flashinfer paged attention with separate page pools for kv and recurrent state, one cuda graph per batch bucket covering the whole decode step
+- continuous batching with chunked prefill, a mixed prefill and decode step and swap based preemption
+- an openai compatible server with streaming, thinking modes, qwen3 coder xml and hermes tool calls, prometheus metrics and keyed rate limits
 
-two engine features make agent turns fast: a turn to turn prefix cache for the hybrid model (a turn at a 75k token context drops from 9.7 s to 0.6 s to first token) and speculative decoding for sampled requests.
+the walkthrough is in [docs/architecture.md](docs/architecture.md) and the api in [docs/api.md](docs/api.md).
 
-## what is inside
-
-- custom triton gated deltanet kernels: pool indexed recurrent decode, fused causal conv and a fused verify and commit kernel for speculative decoding, at 86 to 87 percent of peak hbm bandwidth.
-- fused fp8 weights with per shape gemm dispatch across marlin, deepgemm, cutlass and flashinfer backends, picked from a measured priority table.
-- flashinfer paged attention with independent page pools for the kv cache and the ssm state.
-- one cuda graph per batch size bucket that captures the entire decode step, sampler included.
-- continuous batching scheduler with chunked prefill, a mixed prefill plus decode step and swap based preemption.
-- mtp speculative decoding with the checkpoint's own draft head and a statistical acceptance gate.
-- openai compatible server: streaming, thinking on and off, qwen3 coder xml and hermes tool calls, prometheus metrics, api keys with rate limits and usage metering.
-- turn to turn prefix cache for agent conversations and speculative sampling for temperature above zero.
-
-architecture walkthrough: [docs/architecture.md](docs/architecture.md). api reference: [docs/api.md](docs/api.md).
-
-## quick start
-
-requirements: a cuda gpu with enough memory for the fp8 checkpoint (an h200 was used), python 3.10 or newer, and the packages in `engine/requirements.txt`.
-
-```bash
-pip install -r engine/requirements.txt
-hf download Qwen/Qwen3.8-27B-FP8
-```
-
-run the server:
-
-```bash
-PYTHONPATH=engine python -m qwenfast.runtime.serve \
-  --model /path/to/Qwen3.8-27B-FP8 --served-model-name qwen3.8-27b \
-  --preset fastest --spec-k 3 --spec-max-batch 16 \
-  --mixed-forward --mixed-graphs --overlap --overlap-min-fill 0.75 \
-  --prefill-chunk-tokens 8192 --detok-workers 0 --async-scheduling \
-  --host 0.0.0.0 --port 8000
-```
-
-query it with any openai client:
-
-```python
-from openai import OpenAI
-client = OpenAI(api_key="none", base_url="http://localhost:8000/v1")
-r = client.chat.completions.create(model="qwen3.8-27b",
-                                   messages=[{"role": "user", "content": "hi"}],
-                                   temperature=0)
-print(r.choices[0].message.content)
-```
-
-speculative decoding engages on greedy requests, so send `temperature: 0` for the fastest single stream.
-
-## benchmarks and tests
-
-```bash
-# serving load sweep against any openai compatible server
-python benchmarks/bench_serve.py --base-url http://localhost:8000/v1 --model qwen3.8-27b \
-  --concurrency 1,8,32,64,128,256 --input-len 2000 --output-len 500 --dataset random \
-  --out results/my-run.json --tag my-run
-
-# quality gate (gsm8k 200, ifeval 50)
-python evals/run_eval.py --base-url http://localhost:8000/v1 --model qwen3.8-27b
-
-# cpu tests, no gpu needed (gpu tests skip automatically)
-pytest
-```
-
-## repository layout
+## repository
 
 | path | content |
 |---|---|
-| `engine/qwenfast/` | the engine: `kernels_gdn/`, `gemm/`, `attn/`, `runtime/`, `server/` |
-| `engine/reference/` | upstream hugging face config and modeling files used for parity checks |
-| `benchmarks/` | serving load harness and the result files behind the tables above |
-| `evals/` | gsm8k and ifeval quality gate |
-| `kernels/microbench/` | standalone kernel microbenchmarks |
-| `agent/` | long running autonomous agent with complexity routing, on the pi sdk |
-| `demo/` | next.js streaming chat demo that proxies to the engine |
-| `scripts/` | gpu box setup, server supervisor and operator tools |
-| `docs/` | architecture, benchmarks and api reference |
+| [engine/](engine/qwenfast) | the inference engine: kernels, gemm dispatch, attention, runtime, server |
+| [code/](code/README.md) | qwen fast code: patches, pinned toolchain, build, installer, services |
+| [agent/](agent/README.md) | gateway, router, task runner and gpu box keeper, plus a terminal-bench adapter |
+| [scripts/](scripts/README.md) | gpu server bring up, supervisors and operator tools |
+| [benchmarks/](benchmarks) and [evals/](evals) | serving load harness, results, gsm8k and ifeval gate |
+| [docs/](docs) | architecture, api and benchmarks |
+| [demo/](demo) | next.js streaming chat demo |
+
+## tests
+
+```bash
+pytest                          # engine and server, cpu only; gpu tests skip themselves
+npm --prefix agent ci && npm --prefix agent test      # gateway, router, daemon against a mock server
+docker build -f code/test/linux.Dockerfile -t qfc-linux .    # clean linux install of qwen fast code
+```
 
 ## license
 
-mit, see [license](LICENSE). the files under `engine/reference/` are from the qwen and hugging face transformers teams under the apache 2.0 license.
+mit, see [license](LICENSE). qwen fast code is built from [opencode](https://github.com/sst/opencode) (mit). files under `engine/reference/` come from the qwen and hugging face transformers teams under apache 2.0.
