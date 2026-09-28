@@ -7,8 +7,8 @@ jobs:
   agent:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: npm ci
@@ -21,8 +21,8 @@ jobs:
   engine:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -32,7 +32,7 @@ jobs:
   scripts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: for f in $(git ls-files '*.sh') code/bin/qfc agent/bin/qfa; do sh -n "$f"; done
       - run: python3 -m py_compile code/patches/apply.py agent/tbench/report.py scripts/lint_docs.py
       - run: python3 scripts/lint_docs.py $(git ls-files '*.md')
