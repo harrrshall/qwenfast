@@ -29,7 +29,7 @@ exports/
 .idea/
 .vscode/
 
-# qwen fast code build outputs
+# qwenfast code build outputs
 code/.build/
 code/.toolchain/
 code/dist/

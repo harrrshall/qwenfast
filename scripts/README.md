@@ -26,6 +26,7 @@ the two model backend for the long running agent in [agent/](../agent/README.md)
 
 | script | what it does |
 |---|---|
+| `jarvis_setup.sh` | runs on your machine: creates (or resumes with `--box <id>`) an h200 jarvislabs box, uploads the engine and these scripts, writes `.secrets/agent_key` and `.secrets/agent_box_id`, and starts `remote_agent_bringup.sh` |
 | `remote_agent_bringup.sh` | fresh or resumed box to serving: downloads only the two fp8 checkpoints, builds the venv, then becomes the stack keeper. idempotent |
 | `remote_agent_stack.sh` | the keeper: starts the big tier first so its pools are allocated, then the small tier, and restarts a supervisor that dies. runs on a jarvislabs box as is, and on any other gpu machine from this checkout (engine, active venv, hugging face cache, key in `~/.qwenfast/secrets/agent_key`). sizes come from env vars (`BIG_SEQS`, `BIG_CTX`, `BIG_KV_PAGES`, `BIG_PREFIX_ENTRIES`, `SMALL_GPU_UTIL`) |
 | `remote_supervise.sh` | per server watchdog: health polls, drain, restart with backoff, log rotation, heartbeat json. kills only its own process group, so two servers can share the gpu |

@@ -1,5 +1,5 @@
 #!/bin/sh
-# the two background services of qwen fast code, kept alive by the os:
+# the two background services of qwenfast code, kept alive by the os:
 #
 #   qwenfast-agent  the daemon: openai compatible gateway + router on 127.0.0.1:7788, gpu box
 #                   keeper (resume, idle pause, ssh tunnel), background task runner
@@ -103,8 +103,8 @@ case "${1:-status}" in
         plist ai.qwenfast.agent /usr/bin/caffeinate -i $AGENT_CMD
         if [ "$SERVER_LAUNCHD" = 1 ]; then plist ai.qwenfast.code $SERVER_CMD; else rm -f "$HOME/Library/LaunchAgents/ai.qwenfast.code.plist"; fi ;;
       systemd)
-        unit qwenfast-agent "qwen fast code daemon (gateway, router, gpu box keeper)" "$AGENT_CMD"
-        unit qwenfast-code "qwen fast code server (sessions)" "$SERVER_CMD"
+        unit qwenfast-agent "qwenfast code daemon (gateway, router, gpu box keeper)" "$AGENT_CMD"
+        unit qwenfast-code "qwenfast code server (sessions)" "$SERVER_CMD"
         systemctl --user daemon-reload
         systemctl --user enable qwenfast-agent qwenfast-code >/dev/null 2>&1
         command -v loginctl >/dev/null && loginctl show-user "$(id -un)" -p Linger 2>/dev/null | grep -q yes || \

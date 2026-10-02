@@ -7,7 +7,7 @@
   "enabled_providers": ["qwenfast"],
   "provider": {
     "qwenfast": {
-      "name": "Qwen Fast",
+      "name": "Qwenfast",
       "npm": "@ai-sdk/openai-compatible",
       "options": {
         "baseURL": "http://127.0.0.1:7788/v1",

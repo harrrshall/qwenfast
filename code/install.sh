@@ -1,5 +1,5 @@
 #!/bin/sh
-# installs qwen fast code for the current user on macos or linux, from this checkout.
+# installs qwenfast code for the current user on macos or linux, from this checkout.
 #
 #   sh code/install.sh
 #

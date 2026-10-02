@@ -1,5 +1,5 @@
 # a clean linux machine with nothing but base tools: proves `sh code/install.sh` builds and runs
-# qwen fast code from scratch on linux with the same pinned toolchain as macos.
+# qwenfast code from scratch on linux with the same pinned toolchain as macos.
 #   docker build -f code/test/linux.Dockerfile -t qfc-linux .    (from the repo root)
 FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \

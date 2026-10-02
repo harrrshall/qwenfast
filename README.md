@@ -3,7 +3,7 @@
 a fast inference engine for `qwen3.8-27b` and the coding agent that runs on it.
 
 - **engine**: a from scratch server for the hybrid qwen3.8-27b in pytorch, triton and flashinfer, with an openai compatible api, speculative decoding and a prefix cache built for agent conversations
-- **qwen fast code** (`qfc`): the opencode terminal interface running on your mac or linux machine against your own qwen models, routing every conversation to the model that fits it
+- **qwenfast code** (`qfc`): the opencode terminal interface running on your mac or linux machine against your own qwen models, routing every conversation to the model that fits it
 - **agent daemon**: a local gateway and background task runner that keeps sessions alive for hours, wakes the gpu when you start working and pauses it when you stop
 
 ```
@@ -18,16 +18,19 @@ your machine                                                     gpu server
 
 ## quick start
 
-**use qwen fast code.** on macos or linux, with a c++ toolchain installed (`xcode-select --install` on macos, `build-essential` on debian and ubuntu):
+new to qwenfast code? the [getting started guide](code/README.md#getting-started) walks through prerequisites, a model backend, install and a first task in four steps.
+
+**use qwenfast code.** on macos or linux, with a c++ toolchain installed (`xcode-select --install` on macos, `build-essential` on debian and ubuntu):
 
 ```bash
 git clone https://github.com/harrrshall/qwenfast && cd qwenfast
-QFC_API_KEY=<key> QFC_BIG_URL=http://<gpu host>:8000 QFC_SMALL_URL=http://<gpu host>:8001 sh code/install.sh
-qfc status        # models, routing and server health
-qfc               # open the tui in the current project
+sh scripts/jarvis_setup.sh        # optional: an h200 box on jarvislabs with both models
+sh code/install.sh                # or pass QFC_API_KEY, QFC_BIG_URL and QFC_SMALL_URL for your own servers
+qfc status                        # models, routing and server health
+qfc                               # open the tui in the current project
 ```
 
-the installer downloads a pinned, checksum verified toolchain, builds `qfc` from a pinned opencode release and starts two background services. any openai compatible servers work as the backend; the next step serves the intended ones.
+the installer downloads a pinned, checksum verified toolchain, builds `qfc` from a pinned opencode release and starts two background services. any openai compatible servers work as the backend; the next step serves the intended ones on your own gpu.
 
 **serve the models.** on a linux machine with an h200 (or any gpu with about 140 gb of memory for both models), cuda 13 and python 3.10 or newer:
 
@@ -38,7 +41,7 @@ mkdir -p ~/.qwenfast/secrets && python -c "import secrets; print(secrets.token_u
 sh scripts/remote_agent_stack.sh      # qwenfast on :8000, vllm on :8001, both supervised
 ```
 
-the key in `~/.qwenfast/secrets/agent_key` is the `QFC_API_KEY` for the install above. `scripts/remote_agent_bringup.sh` does all of this on a fresh [jarvislabs](https://jarvislabs.ai) box. with `.secrets/agent_key` and `.secrets/agent_box_id` in the checkout, the gateway manages that box itself: it resumes a paused box when you start working, reaches it through an ssh tunnel and pauses it after an idle hour.
+the key in `~/.qwenfast/secrets/agent_key` is the `QFC_API_KEY` for the install above. on jarvislabs, `scripts/jarvis_setup.sh` does all of this for you and writes `.secrets/agent_key` and `.secrets/agent_box_id`, so the gateway manages the box itself: it resumes a paused box when you start working, reaches it through an ssh tunnel and pauses it after an idle hour.
 
 **serve only the engine.**
 
@@ -52,7 +55,7 @@ PYTHONPATH=engine python -m qwenfast.runtime.serve \
 
 ## routing
 
-qwen fast code defaults to the `auto` model. the gateway routes each conversation to one of three tiers:
+qwenfast code defaults to the `auto` model. the gateway routes each conversation to one of three tiers:
 
 | tier | model | thinking | used for |
 |---|---|---|---|
@@ -99,7 +102,7 @@ the walkthrough is in [docs/architecture.md](docs/architecture.md) and the api i
 | path | content |
 |---|---|
 | [engine/](engine/qwenfast) | the inference engine: kernels, gemm dispatch, attention, runtime, server |
-| [code/](code/README.md) | qwen fast code: patches, pinned toolchain, build, installer, services |
+| [code/](code/README.md) | qwenfast code: patches, pinned toolchain, build, installer, services |
 | [agent/](agent/README.md) | gateway, router, task runner and gpu box keeper, plus a terminal-bench adapter |
 | [scripts/](scripts/README.md) | gpu server bring up, supervisors and operator tools |
 | [benchmarks/](benchmarks) and [evals/](evals) | serving load harness, results, gsm8k and ifeval gate |
@@ -111,9 +114,9 @@ the walkthrough is in [docs/architecture.md](docs/architecture.md) and the api i
 ```bash
 pytest                          # engine and server, cpu only; gpu tests skip themselves
 npm --prefix agent ci && npm --prefix agent test      # gateway, router, daemon against a mock server
-docker build -f code/test/linux.Dockerfile -t qfc-linux .    # clean linux install of qwen fast code
+docker build -f code/test/linux.Dockerfile -t qfc-linux .    # clean linux install of qwenfast code
 ```
 
 ## license
 
-mit, see [license](LICENSE). qwen fast code is built from [opencode](https://github.com/sst/opencode) (mit). files under `engine/reference/` come from the qwen and hugging face transformers teams under apache 2.0.
+mit, see [license](LICENSE). qwenfast code is built from [opencode](https://github.com/sst/opencode) (mit). files under `engine/reference/` come from the qwen and hugging face transformers teams under apache 2.0.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""turns a pristine opencode checkout into qwen fast code.
+"""turns a pristine opencode checkout into qwenfast code.
 
     python3 patches/apply.py <opencode checkout>
 
@@ -10,7 +10,7 @@ the build loudly instead of shipping a half branded binary. the edits are delibe
     (~/.config/qwenfast-code, ~/.local/share/qwenfast-code, ...), so qfc never touches an opencode
     install on the same machine;
   * the command is `qfc`;
-  * the wordmark says "qwenfast code" and user facing text says "Qwen Fast Code" (upstream's paid
+  * the wordmark says "qwenfast code" and user facing text says "Qwenfast Code" (upstream's paid
     service names, "OpenCode Zen" and "OpenCode Go", are left as they are);
   * everything else, the tui, the server, sessions, tools and agents, is upstream opencode.
 """
@@ -44,13 +44,13 @@ def sub(root: Path, rel: str, old: str, new: str, count: int = 1) -> None:
 
 
 def brand_text(root: Path, rel: str) -> int:
-    """'OpenCode' -> 'Qwen Fast Code' in string literals and jsx text, never in identifiers or in
+    """'OpenCode' -> 'Qwenfast Code' in string literals and jsx text, never in identifiers or in
     upstream's service names (OpenCode Zen, OpenCode Go)."""
     p = root / rel
     s = p.read_text()
-    new, n = re.subn(r"(?<![\w.$])OpenCode(?! (?:Zen|Go)\b)(?![\w$])", "Qwen Fast Code", s)
+    new, n = re.subn(r"(?<![\w.$])OpenCode(?! (?:Zen|Go)\b)(?![\w$])", "Qwenfast Code", s)
     # identifiers and imports never use the bare capitalized word in this code base, but make sure
-    for bad in ("import Qwen Fast Code", "Qwen Fast Code("):
+    for bad in ("import Qwenfast Code", "Qwenfast Code("):
         if bad in new:
             sys.exit(f"patch failed: {rel}: branding touched code ({bad})")
     p.write_text(new)
@@ -81,17 +81,17 @@ def main() -> None:
 
     # the sidebar footer spells the name as two styled spans: "Open" + "Code"
     for rel in ("packages/tui/src/feature-plugins/sidebar/footer.tsx", "packages/tui/src/routes/session/sidebar.tsx"):
-        sub(root, rel, "</span> <b>Open</b>", "</span> <b>Qwen Fast </b>")
+        sub(root, rel, "</span> <b>Open</b>", "</span> <b>Qwenfast </b>")
 
     # command descriptions in `qfc --help`
     described = 0
     for f in sorted((root / "packages/opencode/src/cli/cmd").rglob("*.ts")):
         s = f.read_text()
-        new, n = re.subn(r'(describe:\s*"[^"]*?)(?<!\x27)\bopencode\b(?!\x27)', r"\1qwen fast code", s)
+        new, n = re.subn(r'(describe:\s*"[^"]*?)(?<!\x27)\bopencode\b(?!\x27)', r"\1qwenfast code", s)
         while n:
             described += n
             s = new
-            new, n = re.subn(r'(describe:\s*"[^"]*?)(?<!\x27)\bopencode\b(?!\x27)', r"\1qwen fast code", s)
+            new, n = re.subn(r'(describe:\s*"[^"]*?)(?<!\x27)\bopencode\b(?!\x27)', r"\1qwenfast code", s)
         f.write_text(s)
 
     total = 0
@@ -101,7 +101,7 @@ def main() -> None:
                 total += brand_text(root, str(f.relative_to(root)))
     if total < 10:
         sys.exit(f"patch failed: only {total} user facing OpenCode strings rebranded, upstream changed shape")
-    print(f"qwen fast code patches applied ({total} strings and {described} command descriptions rebranded)")
+    print(f"qwenfast code patches applied ({total} strings and {described} command descriptions rebranded)")
 
 
 if __name__ == "__main__":

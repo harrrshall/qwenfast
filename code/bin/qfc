@@ -1,5 +1,5 @@
 #!/bin/sh
-# qfc: qwen fast code.
+# qfc: qwenfast code.
 #
 #   qfc [dir]            open the tui on dir (default: the current directory), attached to the
 #                        local server, so sessions keep running when the tui closes and every
@@ -64,13 +64,13 @@ case "${1:-}" in
       *) tail -n 200 -F "$QFC_HOME/agent/logs/daemon.log" ;;
     esac ;;
   service) shift; exec sh "$SERVICES" "$@" ;;
-  upgrade) echo "qwen fast code is built from source: git pull, then sh code/install.sh" ;;
+  upgrade) echo "qwenfast code is built from source: git pull, then sh code/install.sh" ;;
   run)
     shift
     ensure_services
     exec "$BIN" run --attach "$SERVER" --dir "$PWD" "$@" ;;
   -h|--help|help)
-    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+    sed -n '2,/^[^#]/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//' ;;
   completion|acp|mcp|attach|debug|providers|auth|agent|uninstall|serve|web|models|stats|export|import|github|pr|session|plugin|db|-v|--version)
     exec "$BIN" "$@" ;;
   *)

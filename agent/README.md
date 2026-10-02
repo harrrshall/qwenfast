@@ -24,7 +24,7 @@ your mac                                             jarvislabs h200 (one box)
 
 ## openai compatible gateway
 
-the daemon also serves `http://127.0.0.1:7788/v1` (`/models`, `/chat/completions`), which [qwen fast code](../code/README.md) and any other openai client can use. it offers `auto` plus one model per tier, maps each to the right server and thinking settings, sends traffic through the tunnel, holds requests while a paused box wakes up, and remembers each conversation's tier across restarts (`gateway.json`). `POST /box/wake` and `POST /box/pause` start or stop the gpu box on request.
+the daemon also serves `http://127.0.0.1:7788/v1` (`/models`, `/chat/completions`), which [qwenfast code](../code/README.md) and any other openai client can use. it offers `auto` plus one model per tier, maps each to the right server and thinking settings, sends traffic through the tunnel, holds requests while a paused box wakes up, and remembers each conversation's tier across restarts (`gateway.json`). `POST /box/wake` and `POST /box/pause` start or stop the gpu box on request.
 
 ## routing
 
@@ -52,7 +52,7 @@ qwenfast keeps a turn to turn prefix cache for agent conversations. each prompt 
 
 ## install
 
-`sh code/install.sh` (see [qwen fast code](../code/README.md)) installs the daemon together with qwen fast code: it runs under launchd on macos and `systemd --user` on linux, keeps its state in `~/.qwenfast-code/agent` and puts `qfa` on your path. to run it from this checkout while developing:
+`sh code/install.sh` (see [qwenfast code](../code/README.md)) installs the daemon together with qwenfast code: it runs under launchd on macos and `systemd --user` on linux, keeps its state in `~/.qwenfast-code/agent` and puts `qfa` on your path. to run it from this checkout while developing:
 
 ```bash
 cd agent && npm ci

@@ -174,7 +174,7 @@ test("gateway lists the tier models", async () => {
 });
 
 test("gateway routes auto conversations and keeps the highest tier", async () => {
-  const system = { role: "system", content: "you are qwen fast code" };
+  const system = { role: "system", content: "you are qwenfast code" };
   const first = { role: "user", content: "list the files in src" };
   const a = await chat({ model: "qwenfast/auto", stream: true, messages: [system, first] });
   assert.equal(a.status, 200);

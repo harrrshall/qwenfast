@@ -1,5 +1,5 @@
 // openai compatible gateway on the daemon (127.0.0.1:7788/v1): the one endpoint every local client
-// (qwen fast code, pi, scripts) talks to. it
+// (qwenfast code, pi, scripts) talks to. it
 //
 //   * exposes the tiers as models, plus `auto`, which routes each conversation by complexity;
 //   * maps a tier to the right server, model name and thinking settings;
