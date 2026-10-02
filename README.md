@@ -1,4 +1,4 @@
-# qwenfast
+# qwenfast code
 
 a fast inference engine for `qwen3.8-27b` and the coding agent that runs on it.
 
